@@ -1,0 +1,174 @@
+
+# Kullanılabilir bölgeyi (Availability Domain) çekiyoruz
+data "oci_identity_availability_domains" "ads" {
+  compartment_id = var.compartment_ocid
+}
+
+# Ubuntu 22.04 Minimal imajını buluyoruz
+data "oci_core_images" "ubuntu" {
+  compartment_id   = var.compartment_ocid
+  operating_system = "Canonical Ubuntu"
+  shape            = "VM.Standard.A1.Flex"
+  sort_by          = "TIMECREATED"
+  sort_order       = "DESC"
+}
+
+# Sanal Ağ (VCN)
+resource "oci_core_vcn" "mc_vcn" {
+  compartment_id = var.compartment_ocid
+  cidr_blocks    = ["10.0.0.0/16"]
+  display_name   = "minecraft-vcn"
+  dns_label      = "mcvcn"
+}
+
+# İnternet Ağ Geçidi
+resource "oci_core_internet_gateway" "mc_ig" {
+  compartment_id = var.compartment_ocid
+  vcn_id         = oci_core_vcn.mc_vcn.id
+  display_name   = "minecraft-ig"
+}
+
+# Yönlendirme Tablosu
+resource "oci_core_route_table" "mc_rt" {
+  compartment_id = var.compartment_ocid
+  vcn_id         = oci_core_vcn.mc_vcn.id
+  display_name   = "minecraft-rt"
+
+  route_rules {
+    destination       = "0.0.0.0/0"
+    destination_type  = "CIDR_BLOCK"
+    network_entity_id = oci_core_internet_gateway.mc_ig.id
+  }
+}
+
+# Güvenlik Listesi (Minecraft TCP/UDP 25565 ve SSH 22 portunu açıyoruz)
+resource "oci_core_security_list" "mc_sl" {
+  compartment_id = var.compartment_ocid
+  vcn_id         = oci_core_vcn.mc_vcn.id
+  display_name   = "minecraft-sl"
+
+  egress_security_rules {
+    destination = "0.0.0.0/0"
+    protocol    = "all"
+  }
+
+  # Minecraft Java TCP Portu
+  ingress_security_rules {
+    protocol = "6" # TCP
+    source   = "0.0.0.0/0"
+    tcp_options {
+      min = 25565
+      max = 25565
+    }
+  }
+
+  # Minecraft UDP Portu (Gerekebileceği için eklendi)
+  ingress_security_rules {
+    protocol = "17" # UDP
+    source   = "0.0.0.0/0"
+    udp_options {
+      min = 25565
+      max = 25565
+    }
+  }
+
+  # SSH Portu
+  ingress_security_rules {
+    protocol = "6" # TCP
+    source   = "0.0.0.0/0"
+    tcp_options {
+      min = 22
+      max = 22
+    }
+  }
+}
+
+# Alt Ağ (Subnet)
+resource "oci_core_subnet" "mc_subnet" {
+  compartment_id    = var.compartment_ocid
+  vcn_id            = oci_core_vcn.mc_vcn.id
+  cidr_block        = "10.0.1.0/24"
+  display_name      = "minecraft-subnet"
+  dns_label         = "mcsub"
+  route_table_id    = oci_core_route_table.mc_rt.id
+  security_list_ids = [oci_core_security_list.mc_sl.id]
+}
+
+# Ampere A1 Compute Sunucusu (4 OCPU, 24 GB RAM)
+resource "oci_core_instance" "mc_server" {
+  compartment_id      = var.compartment_ocid
+  availability_domain = data.oci_identity_availability_domains.ads.availability_domains[0].name
+  display_name        = "Minecraft-Server"
+  shape               = "VM.Standard.A1.Flex"
+
+  shape_config {
+    ocpus         = 4
+    memory_in_gbs = 24
+  }
+
+  create_vnic_details {
+    subnet_id        = oci_core_subnet.mc_subnet.id
+    assign_public_ip = true
+  }
+
+  source_details {
+    source_type = "image"
+    source_id   = data.oci_core_images.ubuntu.images[0].id
+  }
+
+  metadata = {
+    ssh_authorized_keys = file("~/.ssh/id_rsa.pub")
+    user_data           = base64encode(<<-EOF
+      #!/bin/bash
+      set -e
+
+      # 1. Oracle Ubuntu varsayılan iptables engellemelerini tamamen kaldırıyoruz
+      iptables -F
+      iptables -X
+      iptables -t nat -F
+      iptables -t nat -X
+      iptables -t mangle -F
+      iptables -t mangle -X
+      iptables -P INPUT ACCEPT
+      iptables -P FORWARD ACCEPT
+      iptables -P OUTPUT ACCEPT
+
+      # 2. Kalıcı olması için netfilter-persistent ile kaydediyoruz
+      apt-get update -y
+      DEBIAN_FRONTEND=noninteractive apt-get install -y netfilter-persistent iptables-persistent
+      netfilter-persistent save
+
+      # 3. Docker Kurulumu
+      apt-get install -y docker.io
+      systemctl start docker
+      systemctl enable docker
+
+      # 4. Sunucu dizini ayarları
+      mkdir -p /opt/minecraft/data
+      chmod -R 777 /opt/minecraft/data
+
+      # 5. Sadece Docker Parametreleri config.json'dan Çekiliyor
+      docker run -d \
+        --name mc \
+        --restart unless-stopped \
+        -p ${local.config.server_port}:${local.config.server_port}/tcp \
+        -p ${local.config.server_port}:${local.config.server_port}/udp \
+        -e EULA=TRUE \
+        -e VERSION=${local.config.minecraft_version} \
+        -e MEMORY=${local.config.ram_gb}G \
+        -e ONLINE_MODE=${upper(tostring(local.config.online_mode))} \
+        -e MAX_PLAYERS=${local.config.max_players} \
+        -e VIEW_DISTANCE=${local.config.view_distance} \
+        -e ENABLE_RCON=${upper(tostring(local.config.enable_rcon))} \
+        -e MOTD="${local.config.server_name}" \
+        -v /opt/minecraft/data:/data \
+        itzg/minecraft-server
+    EOF
+    )
+  }
+}
+
+output "server_public_ip" {
+  value       = oci_core_instance.mc_server.public_ip
+  description = "Minecraft Sunucusunun IP Adresi"
+}

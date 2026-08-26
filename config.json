@@ -1,0 +1,10 @@
+{
+  "minecraft_version": "1.20.4",
+  "ram_gb": 4,
+  "server_port": 25565,
+  "max_players": 10,
+  "online_mode": false,
+  "view_distance": 15,
+  "server_name": "Emin bir sunucu",
+  "enable_rcon": true
+}

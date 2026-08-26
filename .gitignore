@@ -1,0 +1,15 @@
+# Özel Anahtarlar
+*.pem
+
+# Hassas Değişkenler
+terraform.tfvars
+*.auto.tfvars
+
+# Terraform State Dosyaları
+*.tfstate
+*.tfstate.*
+
+# Terraform Klasör ve Kilit Dosyaları
+.terraform/
+.terraform.lock.hcl
+*.swp

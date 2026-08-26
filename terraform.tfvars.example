@@ -1,0 +1,6 @@
+tenancy_ocid     = "ocid1.tenancy.oc1..aaaaaaaaz7enwygf25vki5xzmxbnpzoawt6sjne2xkqiguyrrdxdecbdl6fa"
+user_ocid        = "ocid1.user.oc1..senin_user_ocid_bilgin"
+compartment_ocid = "ocid1.tenancy.oc1..aaaaaaaaz7enwygf25vki5xzmxbnpzoawt6sjne2xkqiguyrrdxdecbdl6fa"
+fingerprint      = "xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx"
+private_key_path = "yourkeyname.pem"
+
