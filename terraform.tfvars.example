@@ -1,6 +1,5 @@
-tenancy_ocid     = "ocid1.tenancy.oc1..aaaaaaaaz7enwygf25vki5xzmxbnpzoawt6sjne2xkqiguyrrdxdecbdl6fa"
-user_ocid        = "ocid1.user.oc1..senin_user_ocid_bilgin"
-compartment_ocid = "ocid1.tenancy.oc1..aaaaaaaaz7enwygf25vki5xzmxbnpzoawt6sjne2xkqiguyrrdxdecbdl6fa"
+tenancy_ocid     = "ocid1.tenancy.oc1..your_tenancy_ocid_here"
+user_ocid        = "ocid1.user.oc1..your_user_ocid_here"
+compartment_ocid = "ocid1.tenancy.oc1..your_compartment_ocid_here"
 fingerprint      = "xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx"
-private_key_path = "yourkeyname.pem"
-
+private_key_path = "your_key_name.pem"
