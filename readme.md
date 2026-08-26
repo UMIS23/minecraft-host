@@ -39,3 +39,4 @@ Open your terminal in the project directory and run the following commands:
 ```bash
 terraform plan
 terraform apply
+
