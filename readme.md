@@ -37,6 +37,7 @@ Log in to the Oracle Cloud Console:
 Open your terminal in the project directory and run the following commands:
 
 ```bash
+terraform init
 terraform plan
 terraform apply
 
