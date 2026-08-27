@@ -23,7 +23,7 @@ variable "private_key_path" {
   description = "OCI Private Key Path"
 }
 
-variable "region" {
+variable "region_key" {
   type        = string
   description = "OCI Region"
 }
