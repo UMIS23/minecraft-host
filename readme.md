@@ -9,14 +9,14 @@ Follow these simple steps to deploy your infrastructure on Oracle Cloud using Te
 Log in to the Oracle Cloud Console:
 
 * **Tenancy OCID:** Click Profile (top right) -> Tenancy: your_name -> Copy OCID.
-* **User OCID:** Click Profile -> tokens and keys -> Copy OCID.
+* **User OCID:** Click Profile -> Copy OCID.
 * **Compartment OCID:** Go to Menu (top left) -> Identity & Security -> Compartments -> Click on your compartment -> Copy OCID. *(Note: If you don't have a custom compartment, you can use your Tenancy OCID).*
 * **Region Key** Click Developer Tools(left side of the profile) -> Cloud shell -> It's looking at you! 
 ---
 
 ### 2. Create API Key
 
-1. Go to Profile -> User Settings -> API Keys (under Resources on the left).
+1. Go to Profile -> Tokens and Keys -> API Keys (under Resources on the left).
 2. Click **Add API Key** -> Select **Generate API Key Pair**.
 3. Download the **Private Key** (`.pem` file) and save it inside your project folder.
 4. Click **Add** and copy the generated **Fingerprint**.
