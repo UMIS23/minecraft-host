@@ -1,15 +1,15 @@
-# Özel Anahtarlar
+# Private Keys
 *.pem
 
-# Hassas Değişkenler
+# Sensitive Variables
 terraform.tfvars
 *.auto.tfvars
 
-# Terraform State Dosyaları
+# Terraform State Files
 *.tfstate
 *.tfstate.*
 
-# Terraform Klasör ve Kilit Dosyaları
+# Terraform Directory and Lock Files
 .terraform/
 .terraform.lock.hcl
 *.swp

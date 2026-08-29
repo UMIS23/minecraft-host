@@ -174,10 +174,10 @@ resource "oci_core_instance" "mc_server" {
 
 output "load_balancer_public_ip" {
   value       = [for ip in oci_network_load_balancer_network_load_balancer.mc_nlb.ip_addresses : ip.ip_address if ip.is_public][0]
-  description = "Oyuncuların bağlanması gereken NLB IP adresi"
+  description = "NLB IP address that players should connect to"
 }
 
 output "server_public_ip" {
   value       = oci_core_instance.mc_server.public_ip
-  description = "Sunucunun kendi Public IP adresi (yönetim amaçlı)"
+  description = "Server's own public IP address (for administration)"
 }
