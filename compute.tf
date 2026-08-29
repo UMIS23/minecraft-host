@@ -72,6 +72,24 @@ resource "oci_core_security_list" "mc_sl" {
       max = 22
     }
   }
+
+  ingress_security_rules {
+    protocol = "6" # TCP
+    source   = "10.0.0.0/16"
+    tcp_options {
+      min = 25565
+      max = 25565
+    }
+  }
+
+  ingress_security_rules {
+    protocol = "17" # UDP
+    source   = "10.0.0.0/16"
+    udp_options {
+      min = 25565
+      max = 25565
+    }
+  }
 }
 
 resource "oci_core_subnet" "mc_subnet" {
@@ -107,7 +125,7 @@ resource "oci_core_instance" "mc_server" {
 
   metadata = {
     ssh_authorized_keys = file("~/.ssh/id_rsa.pub")
-    user_data           = base64encode(<<-EOF
+    user_data = base64encode(<<-EOF
       #!/bin/bash
       set -e
 
@@ -120,6 +138,8 @@ resource "oci_core_instance" "mc_server" {
       iptables -P INPUT ACCEPT
       iptables -P FORWARD ACCEPT
       iptables -P OUTPUT ACCEPT
+
+      echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99force-ipv4
 
       apt-get update -y
       DEBIAN_FRONTEND=noninteractive apt-get install -y netfilter-persistent iptables-persistent
@@ -152,7 +172,12 @@ resource "oci_core_instance" "mc_server" {
   }
 }
 
+output "load_balancer_public_ip" {
+  value       = [for ip in oci_network_load_balancer_network_load_balancer.mc_nlb.ip_addresses : ip.ip_address if ip.is_public][0]
+  description = "Oyuncuların bağlanması gereken NLB IP adresi"
+}
+
 output "server_public_ip" {
   value       = oci_core_instance.mc_server.public_ip
-  description = "Minecraft Sunucusunun IP Adresi"
+  description = "Sunucunun kendi Public IP adresi (yönetim amaçlı)"
 }
