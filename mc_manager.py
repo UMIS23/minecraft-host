@@ -751,11 +751,23 @@ def cmd_console():
     user = config.get("ssh_user", "ubuntu")
     print("Connecting to server console... (type 'exit' to leave)\n")
     print("Commands: say <msg>, op <player>, whitelist <on/off>, stop, list, etc.\n")
-    rcon_cmd = (
-        "PASS=$(docker exec mc grep 'rcon.password=' /data/server.properties | cut -d'=' -f2) && "
-        "docker exec -e RCON_PASSWORD=$PASS mc rcon-cli --password $PASS"
+
+    remote_script = (
+        "docker exec mc cat /data/server.properties 2>/dev/null "
+        "| grep '^rcon.password=' | cut -d'=' -f2"
     )
-    os.execvp("ssh", ["ssh", "-t", "-i", key_path, f"{user}@{ip}", rcon_cmd])
+    proc = subprocess.run(
+        ["ssh", "-i", key_path, f"{user}@{ip}", remote_script],
+        capture_output=True, text=True, timeout=10
+    )
+    rcon_password = proc.stdout.strip()
+
+    if not rcon_password:
+        print("[ERROR] Could not read RCON password. Is the server running?")
+        sys.exit(1)
+
+    remote_cmd = f"docker exec -e RCON_PASSWORD={rcon_password} mc rcon-cli --password {rcon_password}"
+    os.execvp("ssh", ["ssh", "-t", "-i", key_path, f"{user}@{ip}", remote_cmd])
 
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
