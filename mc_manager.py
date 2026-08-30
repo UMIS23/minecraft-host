@@ -68,6 +68,33 @@ def save_config(config):
         json.dump(config, f, indent=2)
 
 
+def get_java_tag(mc_version):
+    """Map MC version to itzg/minecraft-server Docker image Java tag.
+
+    Returns the image tag suffix (e.g. 'java17', 'java21') based on the
+    Minecraft version, so the correct JVM is used for the modpack.
+    """
+    try:
+        parts = mc_version.split(".")
+        minor = int(parts[1]) if len(parts) > 1 else 0
+        patch = int(parts[2]) if len(parts) > 2 else 0
+    except (ValueError, IndexError):
+        return "java21"
+
+    # MC 1.17.x to 1.20.4 → Java 17
+    if minor <= 16:
+        return "java17"
+    if minor <= 20 and patch <= 4:
+        return "java17"
+    # MC 1.20.5 to 1.21.4 → Java 21
+    if minor == 20 and patch >= 5:
+        return "java21"
+    if minor == 21 and patch <= 4:
+        return "java21"
+    # MC 1.21.5+ → Java 21 (safe default, java25 not widely available yet)
+    return "java21"
+
+
 def get_server_ip():
     """Get server public IP from Terraform output."""
     try:
@@ -516,15 +543,17 @@ def search_modrinth_modpack(query, limit=10):
 
 
 def download_modpack(project_id, version_id=None):
-    """Download a modpack from Modrinth. Returns (filename, temp_path, server_type) or None."""
+    """Download a modpack from Modrinth. Returns (filename, temp_path, server_type, matched_mc) or None."""
     config = load_config()
     version = config["minecraft_version"]
 
+    matched_mc = version
     try:
         if version_id:
             resp = requests.get(f"{MODRINTH_API}/version/{version_id}", timeout=15)
             resp.raise_for_status()
             ver_data = resp.json()
+            matched_mc = ver_data.get("game_versions", [version])[0]
         else:
             resp = requests.get(f"{MODRINTH_API}/project/{project_id}/version", timeout=15)
             resp.raise_for_status()
@@ -562,7 +591,7 @@ def download_modpack(project_id, version_id=None):
         tmp.close()
 
         server_type = ver_data.get("loaders", ["vanilla"])[0] if ver_data.get("loaders") else "vanilla"
-        return filename, tmp.name, server_type
+        return filename, tmp.name, server_type, matched_mc
 
     except requests.RequestException as e:
         print(f"[ERROR] Download failed: {e}")
@@ -608,10 +637,12 @@ def cmd_install_pack(pack_name):
     if not result:
         return
 
-    filename, tmp_path, new_server_type = result
+    filename, tmp_path, new_server_type, matched_mc = result
     config = load_config()
 
+    java_tag = get_java_tag(matched_mc)
     print(f"  Server type from modpack: {new_server_type}")
+    print(f"  Java version: {java_tag} (MC {matched_mc})")
 
     ssh = ssh_connect()
     try:
@@ -748,7 +779,8 @@ print(f'--- Summary: {downloaded} downloaded, {skipped} skipped, {failed} failed
         }
         if new_server_type in loader_map:
             config["server_type"] = loader_map[new_server_type]
-            save_config(config)
+        config["minecraft_version"] = matched_mc
+        save_config(config)
 
         print("  Restarting server with new modpack...")
         memory = config.get("ram_gb", 16)
@@ -777,7 +809,7 @@ print(f'--- Summary: {downloaded} downloaded, {skipped} skipped, {failed} failed
             f"-e ENABLE_RCON={enable_rcon} "
             f'-e MOTD="{motd}" '
             f"-v /opt/minecraft/data:/data "
-            f"itzg/minecraft-server"
+            f"itzg/minecraft-server:{java_tag}"
         )
 
         _, stdout, stderr = ssh_exec(ssh, docker_run, timeout=120)
@@ -913,6 +945,7 @@ def cmd_uninstall_pack():
         # Restart as vanilla
         print("  Starting vanilla server...")
         version = config["minecraft_version"]
+        java_tag = get_java_tag(version)
         memory = config.get("ram_gb", 16)
         port = config.get("server_port", 25565)
         online_mode = str(config.get("online_mode", False)).upper()
@@ -938,7 +971,7 @@ def cmd_uninstall_pack():
             f"-e ENABLE_RCON={enable_rcon} "
             f'-e MOTD="{motd}" '
             f"-v /opt/minecraft/data:/data "
-            f"itzg/minecraft-server"
+            f"itzg/minecraft-server:{java_tag}"
         )
 
         _, stdout, stderr = ssh_exec(ssh, docker_run, timeout=120)
@@ -996,6 +1029,7 @@ def cmd_set_version(version):
         # Recreate container with new version
         print("  Updating container with new version...")
         type_val = config.get("server_type", "vanilla")
+        java_tag = get_java_tag(version)
         memory = config.get("ram_gb", 4)
         port = config.get("server_port", 25565)
         online_mode = str(config.get("online_mode", False)).upper()
@@ -1021,7 +1055,7 @@ def cmd_set_version(version):
             f"-e ENABLE_RCON={enable_rcon} "
             f'-e MOTD="{motd}" '
             f"-v /opt/minecraft/data:/data "
-            f"itzg/minecraft-server"
+            f"itzg/minecraft-server:{java_tag}"
         )
 
         _, stdout, stderr = ssh_exec(ssh, docker_run, timeout=120)
@@ -1079,6 +1113,7 @@ def cmd_set_type(server_type):
         # Recreate container
         print("  Recreating container...")
         version = config["minecraft_version"]
+        java_tag = get_java_tag(version)
         memory = config.get("ram_gb", 4)
         port = config.get("server_port", 25565)
         online_mode = str(config.get("online_mode", False)).upper()
@@ -1104,7 +1139,7 @@ def cmd_set_type(server_type):
             f"-e ENABLE_RCON={enable_rcon} "
             f'-e MOTD="{motd}" '
             f"-v /opt/minecraft/data:/data "
-            f"itzg/minecraft-server"
+            f"itzg/minecraft-server:{java_tag}"
         )
 
         _, stdout, stderr = ssh_exec(ssh, docker_run, timeout=120)
