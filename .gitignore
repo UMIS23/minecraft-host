@@ -5,6 +5,9 @@
 terraform.tfvars
 *.auto.tfvars
 
+# Config with server details
+config.json
+
 # Terraform State Files
 *.tfstate
 *.tfstate.*
@@ -12,4 +15,18 @@ terraform.tfvars
 # Terraform Directory and Lock Files
 .terraform/
 .terraform.lock.hcl
+
+# Python Cache
+__pycache__/
+*.pyc
+
+# Temporary Files
+tmp*.jar
+
+# Backup Directory
+backup/
+
+# Editor Files
 *.swp
+*.swo
+*~
