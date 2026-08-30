@@ -10,7 +10,6 @@ Commands:
     mc_manager.py install <mod_name>         - Search and install a mod from Modrinth
     mc_manager.py remove <mod_name>          - Remove an installed mod
     mc_manager.py list                       - List all installed mods
-    mc_manager.py mods search <query>        - Search for mods on Modrinth
     mc_manager.py set-version <version>      - Change Minecraft version and restart
     mc_manager.py set-type <type>            - Change server type (forge, fabric, paper, etc.)
     mc_manager.py set-motd <message>         - Change server MOTD
@@ -76,7 +75,7 @@ def get_server_ip():
 
     try:
         result = os.popen(
-            f"cd {TERRAFORM_DIR} && terraform output -raw server_public_ip 2>/dev/null"
+            f"cd {TERRAFORM_DIR} && terraform output -raw ssh_ip 2>/dev/null"
         ).read().strip()
         if result:
             config["server_ip"] = result
@@ -244,7 +243,7 @@ def search_modrinth(query, limit=10):
     }
 
     facets = [["project_type:mod"]]
-    if version:
+    if version and modrinth_loader:
         facets.append([f"versions:{version}"])
     if modrinth_loader:
         facets.append([f"categories:{modrinth_loader}"])
@@ -280,22 +279,33 @@ def download_modrinth_mod(project_id, version_id=None):
             resp.raise_for_status()
             ver_data = resp.json()
         else:
-            params = {}
-            if version:
-                params["game_versions"] = json.dumps([version])
-            if modrinth_loader:
-                params["loaders"] = json.dumps([modrinth_loader])
-
+            # Fetch all versions for this mod
             resp = requests.get(
                 f"{MODRINTH_API}/project/{project_id}/version",
-                params=params, timeout=15
+                timeout=15
             )
             resp.raise_for_status()
-            versions = resp.json()
+            all_versions = resp.json()
+
+            # Filter by loader
+            if modrinth_loader:
+                all_versions = [v for v in all_versions if modrinth_loader in v.get("loaders", [])]
+
+            # Try exact version match
+            versions = [v for v in all_versions if version in v.get("game_versions", [])]
+
+            # Fallback: prefix match (e.g. 1.21 for 1.21.4)
+            if not versions and version:
+                prefix = ".".join(version.split(".")[:2])
+                versions = [v for v in all_versions if any(pv.startswith(prefix) for pv in v.get("game_versions", []))]
+
             if not versions:
-                print("[ERROR] No compatible version found for this mod.")
+                print(f"[ERROR] No version found for MC {version} with {loader}.")
                 return None
             ver_data = versions[0]
+            matched_mc = ver_data.get("game_versions", ["?"])[0]
+            matched_loader = ver_data.get("loaders", ["?"])[0]
+            print(f"  Matched: MC {matched_mc} / {matched_loader}")
 
         # Find the primary file
         files = ver_data.get("files", [])
@@ -370,8 +380,8 @@ def cmd_install(mod_name):
     print(f"  Uploading {filename} to server...")
     ssh = ssh_connect()
     try:
-        # Ensure mods directory exists
-        ssh_exec(ssh, "mkdir -p /opt/minecraft/data/mods")
+        # Ensure mods directory exists with correct permissions
+        ssh_exec(ssh, "sudo mkdir -p /opt/minecraft/data/mods && sudo chmod 777 /opt/minecraft/data/mods")
         sftp = ssh.open_sftp()
         remote_path = f"/opt/minecraft/data/mods/{filename}"
         sftp.put(tmp_path, remote_path)
@@ -489,34 +499,6 @@ def cmd_list():
         print(f"{'='*60}\n")
     finally:
         ssh.close()
-
-
-def cmd_mods_search(query):
-    """Search for mods on Modrinth."""
-    print(f"\nSearching for '{query}' on Modrinth...")
-    results = search_modrinth(query, limit=15)
-
-    if not results:
-        print("No mods found.")
-        return
-
-    print(f"\n{'='*70}")
-    print(f"  Modrinth Search Results for '{query}'")
-    print(f"{'='*70}")
-    for i, mod in enumerate(results, 1):
-        title = mod.get("title", "Unknown")
-        slug = mod.get("slug", "")
-        downloads = mod.get("downloads", 0)
-        desc = mod.get("description", "")[:70]
-        categories = ", ".join(mod.get("categories", [])[:3])
-        print(f"  [{i:>2}] {title}")
-        print(f"       Slug: {slug} | Downloads: {downloads:,}")
-        print(f"       Categories: {categories}")
-        print(f"       {desc}")
-        print()
-    print(f"{'='*70}")
-    print(f"  Use 'install <slug>' to install a mod")
-    print(f"{'='*70}\n")
 
 
 # ─── Server Configuration ────────────────────────────────────────────────────
@@ -777,11 +759,10 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Commands:
-  status                       Show server status and info
+  status                       Show server status
   install <name>               Search and install a mod from Modrinth
   remove <name>                Remove an installed mod
-  list                         List all installed mods
-  mods search <query>          Search for mods on Modrinth
+  list                         List installed mods
   set-version <version>        Change Minecraft version (e.g. 1.21)
   set-type <type>              Change server type (forge, fabric, paper, etc.)
   set-motd <message>           Change server MOTD
@@ -806,11 +787,6 @@ Valid server types: vanilla, forge, fabric, paper, spigot, bukkit,
     remove_parser.add_argument("mod_name", help="Mod name to remove")
 
     subparsers.add_parser("list", help="List installed mods")
-
-    mods_parser = subparsers.add_parser("mods", help="Mod operations")
-    mods_sub = mods_parser.add_subparsers(dest="mods_command")
-    search_parser = mods_sub.add_parser("search", help="Search for mods")
-    search_parser.add_argument("query", help="Search query")
 
     version_parser = subparsers.add_parser("set-version", help="Change server version")
     version_parser.add_argument("version", help="New Minecraft version (e.g. 1.21)")
@@ -845,13 +821,6 @@ Valid server types: vanilla, forge, fabric, paper, spigot, bukkit,
         "start": cmd_start,
         "console": cmd_console,
     }
-
-    if args.command == "mods":
-        if args.mods_command == "search":
-            cmd_mods_search(args.query)
-        else:
-            print("Usage: mc_manager.py mods search <query>")
-        return
 
     cmd = commands.get(args.command)
     if cmd:

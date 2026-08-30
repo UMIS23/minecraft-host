@@ -169,17 +169,20 @@ resource "oci_core_instance" "mc_server" {
         -e MOTD="${local.config.server_name}" \
         -v /opt/minecraft/data:/data \
         itzg/minecraft-server
+
+      sleep 5
+      chmod -R 777 /opt/minecraft/data
     EOF
     )
   }
 }
 
-output "load_balancer_public_ip" {
+output "mc_server_ip" {
   value       = [for ip in oci_network_load_balancer_network_load_balancer.mc_nlb.ip_addresses : ip.ip_address if ip.is_public][0]
-  description = "NLB IP address that players should connect to"
+  description = "Minecraft server IP (for players to connect)"
 }
 
-output "server_public_ip" {
+output "ssh_ip" {
   value       = oci_core_instance.mc_server.public_ip
-  description = "Server's own public IP address (for administration)"
+  description = "SSH IP (for admin access via terminal)"
 }

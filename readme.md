@@ -72,11 +72,6 @@ python3 mc_manager.py install <mod_name>
 
 Searches Modrinth for the mod, lets you pick from results, downloads the `.jar` file, and uploads it to the server's mods folder. Optionally restarts the server to apply.
 
-**Example:**
-```bash
-python3 mc_manager.py install lithium
-```
-
 #### Remove a Mod
 
 ```bash
@@ -84,11 +79,6 @@ python3 mc_manager.py remove <mod_name>
 ```
 
 Finds and removes a mod file from the server. Supports partial name matching. If multiple mods match, you'll be prompted to select which one to remove.
-
-**Example:**
-```bash
-python3 mc_manager.py remove lithium
-```
 
 #### List Installed Mods
 
@@ -98,19 +88,6 @@ python3 mc_manager.py list
 
 Lists all `.jar` mod files in the server's mods directory with file sizes.
 
-#### Search for Mods
-
-```bash
-python3 mc_manager.py mods search <query>
-```
-
-Searches Modrinth for mods matching your query. Returns up to 15 results with names, download counts, and descriptions. Use the slug name from results to install.
-
-**Example:**
-```bash
-python3 mc_manager.py mods search "performance"
-```
-
 #### Change Server Version
 
 ```bash
@@ -118,11 +95,6 @@ python3 mc_manager.py set-version <version>
 ```
 
 Stops the current container, updates the Minecraft version, and recreates the container with the new version. Data (world, mods, configs) is preserved.
-
-**Example:**
-```bash
-python3 mc_manager.py set-version 1.21.4
-```
 
 #### Change Server Type
 
@@ -134,11 +106,6 @@ Switches between server types. The server will restart with the new type.
 
 **Valid types:** `vanilla`, `forge`, `fabric`, `paper`, `spigot`, `bukkit`, `purpur`, `sponge`, `velocity`, `quilt`, `neoforge`, `bedrock`
 
-**Example:**
-```bash
-python3 mc_manager.py set-type paper
-```
-
 #### Change Server MOTD
 
 ```bash
@@ -146,11 +113,6 @@ python3 mc_manager.py set-motd <message>
 ```
 
 Updates the Message of the Day (the text shown in the Minecraft server list).
-
-**Example:**
-```bash
-python3 mc_manager.py set-motd "Welcome to My Server!"
-```
 
 #### Restart / Stop / Start
 
