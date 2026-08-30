@@ -1,6 +1,7 @@
 # Private Keys
 *.pem
 
+
 # Sensitive Variables
 terraform.tfvars
 *.auto.tfvars
