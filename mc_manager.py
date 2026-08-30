@@ -68,18 +68,12 @@ def save_config(config):
 
 
 def get_server_ip():
-    """Get server public IP from Terraform output or config."""
-    config = load_config()
-    if config.get("server_ip"):
-        return config["server_ip"]
-
+    """Get server public IP from Terraform output."""
     try:
         result = os.popen(
             f"cd {TERRAFORM_DIR} && terraform output -raw ssh_ip 2>/dev/null"
         ).read().strip()
         if result:
-            config["server_ip"] = result
-            save_config(config)
             return result
     except Exception:
         pass
