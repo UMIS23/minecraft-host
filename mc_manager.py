@@ -8,6 +8,8 @@ Uses Docker (itzg/minecraft-server) with SSH access.
 Commands:
     mc_manager.py status                     - Show server status and info
     mc_manager.py install <mod_name>         - Search and install a mod from Modrinth
+    mc_manager.py install-pack <pack_name>   - Search and install a modpack from Modrinth
+    mc_manager.py uninstall-pack             - Remove modpack and revert to vanilla
     mc_manager.py remove <mod_name>          - Remove an installed mod
     mc_manager.py list                       - List all installed mods
     mc_manager.py set-version <version>      - Change Minecraft version and restart
@@ -494,6 +496,474 @@ def cmd_list():
         ssh.close()
 
 
+# ─── Modpack Management ────────────────────────────────────────────────────────
+
+def search_modrinth_modpack(query, limit=10):
+    """Search Modrinth for modpacks matching the query."""
+    params = {
+        "query": query,
+        "limit": limit,
+        "index": "relevance",
+        "facets": json.dumps([["project_type:modpack"]]),
+    }
+    try:
+        resp = requests.get(f"{MODRINTH_API}/search", params=params, timeout=15)
+        resp.raise_for_status()
+        return resp.json().get("hits", [])
+    except requests.RequestException as e:
+        print(f"[ERROR] Modrinth API error: {e}")
+        return []
+
+
+def download_modpack(project_id, version_id=None):
+    """Download a modpack from Modrinth. Returns (filename, temp_path, server_type) or None."""
+    config = load_config()
+    version = config["minecraft_version"]
+
+    try:
+        if version_id:
+            resp = requests.get(f"{MODRINTH_API}/version/{version_id}", timeout=15)
+            resp.raise_for_status()
+            ver_data = resp.json()
+        else:
+            resp = requests.get(f"{MODRINTH_API}/project/{project_id}/version", timeout=15)
+            resp.raise_for_status()
+            all_versions = resp.json()
+
+            versions = [v for v in all_versions if version in v.get("game_versions", [])]
+            if not versions:
+                prefix = ".".join(version.split(".")[:2])
+                versions = [v for v in all_versions if any(pv.startswith(prefix) for pv in v.get("game_versions", []))]
+
+            if not versions:
+                print(f"[ERROR] No modpack version found for MC {version}.")
+                return None
+            ver_data = versions[0]
+            matched_mc = ver_data.get("game_versions", ["?"])[0]
+            matched_loaders = ver_data.get("loaders", ["?"])
+            print(f"  Matched: MC {matched_mc} / {matched_loaders[0] if matched_loaders else '?'}")
+
+        files = ver_data.get("files", [])
+        if not files:
+            print("[ERROR] No files found in modpack version.")
+            return None
+
+        primary = next((f for f in files if f.get("primary")), files[0])
+        download_url = primary["url"]
+        filename = primary["filename"]
+
+        print(f"  Downloading: {filename}")
+        resp = requests.get(download_url, timeout=120, stream=True)
+        resp.raise_for_status()
+
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".mrpack", dir=str(SCRIPT_DIR))
+        for chunk in resp.iter_content(chunk_size=8192):
+            tmp.write(chunk)
+        tmp.close()
+
+        server_type = ver_data.get("loaders", ["vanilla"])[0] if ver_data.get("loaders") else "vanilla"
+        return filename, tmp.name, server_type
+
+    except requests.RequestException as e:
+        print(f"[ERROR] Download failed: {e}")
+        return None
+
+
+def cmd_install_pack(pack_name):
+    """Search and install a modpack from Modrinth."""
+    print(f"\nSearching for modpack '{pack_name}' on Modrinth...")
+    results = search_modrinth_modpack(pack_name)
+
+    if not results:
+        print("No modpacks found.")
+        return
+
+    print(f"\n{'='*60}")
+    print(f"  Found {len(results)} modpacks:")
+    print(f"{'='*60}")
+    for i, pack in enumerate(results, 1):
+        title = pack.get("title", "Unknown")
+        slug = pack.get("slug", "")
+        downloads = pack.get("downloads", 0)
+        desc = pack.get("description", "")[:80]
+        print(f"  [{i}] {title} ({slug})")
+        print(f"      Downloads: {downloads:,} | {desc}")
+        print()
+
+    try:
+        choice = int(input("Select modpack number (0 to cancel): "))
+        if choice == 0 or choice > len(results):
+            print("Cancelled.")
+            return
+    except (ValueError, EOFError):
+        print("Invalid input.")
+        return
+
+    selected = results[choice - 1]
+    project_id = selected["slug"] or selected["project_id"]
+    title = selected["title"]
+
+    print(f"\nDownloading {title}...")
+    result = download_modpack(project_id)
+    if not result:
+        return
+
+    filename, tmp_path, new_server_type = result
+    config = load_config()
+
+    print(f"  Server type from modpack: {new_server_type}")
+
+    ssh = ssh_connect()
+    try:
+        print("  Stopping server...")
+        ssh_exec(ssh, "docker stop mc", timeout=30)
+
+        print("  Uploading modpack to server...")
+        sftp = ssh.open_sftp()
+        remote_tmp = f"/tmp/{filename}"
+        sftp.put(tmp_path, remote_tmp)
+        sftp.close()
+
+        print("  Extracting modpack overrides...")
+        ssh_exec(ssh, "sudo mkdir -p /opt/minecraft/data")
+
+        extract_script = """#!/usr/bin/env python3
+import zipfile, os, shutil
+
+modpack = '/tmp/{filename}'
+extract_dir = '/tmp/modpack_extract'
+data_dir = '/opt/minecraft/data'
+
+if os.path.exists(extract_dir):
+    shutil.rmtree(extract_dir)
+
+with zipfile.ZipFile(modpack, 'r') as z:
+    z.extractall(extract_dir)
+
+overrides = os.path.join(extract_dir, 'overrides')
+if os.path.isdir(overrides):
+    for item in os.listdir(overrides):
+        src = os.path.join(overrides, item)
+        dst = os.path.join(data_dir, item)
+        if os.path.isdir(src):
+            shutil.copytree(src, dst, dirs_exist_ok=True)
+        else:
+            shutil.copy2(src, dst)
+
+print('OVERRIDES_DONE')
+"""
+        extract_script = extract_script.replace("{filename}", filename)
+
+        sftp = ssh.open_sftp()
+        with sftp.open("/tmp/extract_modpack.py", "w") as f:
+            f.write(extract_script)
+        sftp.close()
+
+        _, stdout, stderr = ssh_exec(
+            ssh,
+            "sudo python3 /tmp/extract_modpack.py && sudo rm /tmp/extract_modpack.py",
+            timeout=120
+        )
+        if "OVERRIDES_DONE" in stdout:
+            print("  Overrides extracted.")
+        else:
+            print(f"  [WARN] Extract issue: {stderr}")
+
+        print("  Downloading additional mods from modrinth.index.json...")
+        download_script = """#!/usr/bin/env python3
+import json, urllib.request, os, sys
+
+with open('/tmp/modpack_extract/modrinth.index.json') as f:
+    index = json.load(f)
+
+data_dir = '/opt/minecraft/data'
+downloaded = 0
+skipped = 0
+failed = 0
+
+for fi in index.get('files', []):
+    path = fi.get('path', '')
+    dest = os.path.join(data_dir, path)
+    if os.path.exists(dest):
+        skipped += 1
+        continue
+    url = fi.get('downloads', [None])[0]
+    if not url:
+        continue
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    try:
+        urllib.request.urlretrieve(url, dest)
+        downloaded += 1
+        print(f'Downloaded: {os.path.basename(path)}')
+    except Exception as e:
+        failed += 1
+        print(f'WARN Failed: {os.path.basename(path)}: {e}')
+
+print(f'--- Summary: {downloaded} downloaded, {skipped} skipped, {failed} failed ---')
+"""
+        sftp = ssh.open_sftp()
+        with sftp.open("/tmp/download_modpack.py", "w") as f:
+            f.write(download_script)
+        sftp.close()
+
+        _, stdout, stderr = ssh_exec(
+            ssh,
+            "sudo python3 /tmp/download_modpack.py && sudo rm /tmp/download_modpack.py",
+            timeout=600
+        )
+        if stdout:
+            for line in stdout.strip().split("\n"):
+                if line.strip():
+                    print(f"  {line.strip()}")
+
+        print("  Setting permissions...")
+        ssh_exec(ssh, "sudo chmod -R 777 /opt/minecraft/data && rm -rf /tmp/modpack_extract", timeout=30)
+
+        print("  Removing known client-only mods...")
+        CLIENT_ONLY_MODS = [
+            "colorwheel", "colorwheel_patcher", "iris", "irisfixes",
+            "sodium", "sodium-extra", "sodiumextras", "sodiumdynamiclights",
+            "sodiumoptionsapi", "sodiumoptionsmodcompat", "reeses_sodium_options",
+            "skinlayers3d", "embeddium", "rubidium", "oculus",
+            "betterclouds", "lambdynamiclights", "smartlighting",
+        ]
+        _, mods_list, _ = ssh_exec(ssh, "ls /opt/minecraft/data/mods/ 2>/dev/null")
+        if mods_list:
+            removed = 0
+            for mod_file in mods_list.strip().split("\n"):
+                mod_lower = mod_file.lower()
+                for pattern in CLIENT_ONLY_MODS:
+                    if pattern in mod_lower:
+                        ssh_exec(ssh, f"sudo rm -f /opt/minecraft/data/mods/{mod_file}")
+                        print(f"  Removed client mod: {mod_file}")
+                        removed += 1
+                        break
+            if removed:
+                print(f"  Removed {removed} client-only mod(s)")
+
+        print("  Updating server type and version...")
+        loader_map = {
+            "forge": "forge", "fabric": "fabric", "quilt": "quilt",
+            "neoforge": "neoforge", "liteloader": "liteloader",
+        }
+        if new_server_type in loader_map:
+            config["server_type"] = loader_map[new_server_type]
+            save_config(config)
+
+        print("  Restarting server with new modpack...")
+        memory = config.get("ram_gb", 16)
+        port = config.get("server_port", 25565)
+        online_mode = str(config.get("online_mode", False)).upper()
+        max_players = config.get("max_players", 20)
+        view_distance = config.get("view_distance", 20)
+        enable_rcon = str(config.get("enable_rcon", True)).upper()
+        motd = config.get("server_name", "A Cool Server")
+        mc_version = config["minecraft_version"]
+
+        docker_run = (
+            f"docker rm -f mc 2>/dev/null; "
+            f"docker run -d "
+            f"--name mc "
+            f"--restart unless-stopped "
+            f"-p {port}:{port}/tcp "
+            f"-p {port}:{port}/udp "
+            f"-e EULA=TRUE "
+            f"-e VERSION={mc_version} "
+            f"-e TYPE={new_server_type.upper()} "
+            f"-e MEMORY={memory}G "
+            f"-e ONLINE_MODE={online_mode} "
+            f"-e MAX_PLAYERS={max_players} "
+            f"-e VIEW_DISTANCE={view_distance} "
+            f"-e ENABLE_RCON={enable_rcon} "
+            f'-e MOTD="{motd}" '
+            f"-v /opt/minecraft/data:/data "
+            f"itzg/minecraft-server"
+        )
+
+        _, stdout, stderr = ssh_exec(ssh, docker_run, timeout=120)
+        if stderr and "Error" in stderr:
+            print(f"  [WARN] Docker output: {stderr}")
+
+        print("  Waiting for server to start...")
+        time.sleep(20)
+
+        max_retries = 5
+        for attempt in range(max_retries):
+            _, new_status, _ = ssh_exec(ssh, "docker inspect mc --format '{{.State.Status}}' 2>/dev/null")
+            if new_status == "running":
+                _, health_out, _ = ssh_exec(ssh, "docker inspect mc --format '{{.State.Health.Status}}' 2>/dev/null")
+                if health_out.strip() == "healthy":
+                    print(f"  Server is running with {title} ({new_server_type})")
+                    break
+
+            print(f"  [WARN] Server not ready (attempt {attempt + 1}/{max_retries})")
+            _, logs, _ = ssh_exec(ssh, "docker logs mc --tail 20 2>&1")
+
+            crash_mod = None
+            if logs:
+                for line in logs.split("\n"):
+                    if "Cannot load class" in line and "environment type SERVER" in line:
+                        m = re.search(r"provided by '(\w+)'", line)
+                        if m:
+                            crash_mod = m.group(1)
+                        break
+                    if "Failed to start" in line or "Exception" in line:
+                        m = re.search(r"provided by '(\w+)'", line)
+                        if m:
+                            crash_mod = m.group(1)
+
+            if crash_mod:
+                print(f"  Removing problematic mod: {crash_mod}")
+                ssh_exec(ssh, f"sudo rm -f /opt/minecraft/data/mods/*{crash_mod}* && sudo rm -f /opt/minecraft/data/mods/*{crash_mod.lower()}*", timeout=15)
+                _, found_mods, _ = ssh_exec(ssh, f"ls /opt/minecraft/data/mods/ | grep -i {crash_mod}")
+                if found_mods:
+                    for mf in found_mods.strip().split("\n"):
+                        if mf.strip():
+                            ssh_exec(ssh, f"sudo rm -f /opt/minecraft/data/mods/{mf}")
+
+                print("  Restarting server...")
+                ssh_exec(ssh, "docker restart mc", timeout=60)
+                time.sleep(20)
+            else:
+                print("  Waiting more...")
+                time.sleep(30)
+        else:
+            print(f"  [WARN] Server may not be fully ready after {max_retries} attempts")
+            _, logs, _ = ssh_exec(ssh, "docker logs mc --tail 10 2>&1")
+            if logs:
+                print(f"  Recent logs:\n{logs}")
+
+    finally:
+        ssh.close()
+
+    os.unlink(tmp_path)
+    print("Done.\n")
+
+
+def cmd_uninstall_pack():
+    """Remove installed modpack and revert to vanilla server."""
+    config = load_config()
+    current_type = config.get("server_type", "vanilla")
+
+    print(f"\n{'='*60}")
+    print(f"  Uninstall Modpack")
+    print(f"{'='*60}")
+    print(f"  Current server type: {current_type}")
+    print(f"  This will:")
+    print(f"    1. Stop the server")
+    print(f"    2. Remove ALL mods from /opt/minecraft/data/mods/")
+    print(f"    3. Remove config files from /opt/minecraft/data/config/")
+    print(f"    4. Reset server type to vanilla")
+    print(f"    5. Restart server as vanilla")
+    print(f"{'='*60}")
+
+    confirm = input("\nProceed? (y/n): ").strip().lower()
+    if confirm != "y":
+        print("Cancelled.")
+        return
+
+    # Ask about world data
+    world_confirm = input("Also delete world data? (y/n): ").strip().lower()
+    delete_world = world_confirm == "y"
+
+    ssh = ssh_connect()
+    try:
+        # Stop server
+        print("\n  Stopping server...")
+        ssh_exec(ssh, "docker stop mc", timeout=30)
+
+        # Remove mods
+        print("  Removing mods...")
+        ssh_exec(ssh, "sudo rm -rf /opt/minecraft/data/mods")
+        print("    Deleted: /opt/minecraft/data/mods/")
+
+        # Remove config directory (modpack configs)
+        print("  Removing modpack configs...")
+        ssh_exec(ssh, "sudo rm -rf /opt/minecraft/data/config")
+        print("    Deleted: /opt/minecraft/data/config/")
+
+        # Remove scripts directory if exists (some modpacks add this)
+        ssh_exec(ssh, "sudo rm -rf /opt/minecraft/data/scripts")
+
+        # Remove modpack-specific files
+        ssh_exec(ssh, "sudo rm -f /opt/minecraft/data/modrinth.index.json")
+        ssh_exec(ssh, "sudo rm -f /opt/minecraft/data/.mrpack")
+
+        # Optionally remove world data
+        if delete_world:
+            print("  Removing world data...")
+            ssh_exec(ssh, "sudo rm -rf /opt/minecraft/data/world")
+            ssh_exec(ssh, "sudo rm -rf /opt/minecraft/data/world_nether")
+            ssh_exec(ssh, "sudo rm -rf /opt/minecraft/data/world_the_end")
+            print("    Deleted: world, world_nether, world_the_end")
+
+        # Remove crash reports and logs from modpack
+        ssh_exec(ssh, "sudo rm -rf /opt/minecraft/data/crash-reports")
+        ssh_exec(ssh, "sudo rm -rf /opt/minecraft/data/logs")
+
+        # Fix permissions
+        print("  Fixing permissions...")
+        ssh_exec(ssh, "sudo chmod -R 777 /opt/minecraft/data", timeout=30)
+
+        # Update config to vanilla
+        print("  Updating config.json to vanilla...")
+        config["server_type"] = "vanilla"
+        save_config(config)
+
+        # Restart as vanilla
+        print("  Starting vanilla server...")
+        version = config["minecraft_version"]
+        memory = config.get("ram_gb", 16)
+        port = config.get("server_port", 25565)
+        online_mode = str(config.get("online_mode", False)).upper()
+        max_players = config.get("max_players", 20)
+        view_distance = config.get("view_distance", 20)
+        enable_rcon = str(config.get("enable_rcon", True)).upper()
+        motd = config.get("server_name", "A Cool Server")
+
+        docker_run = (
+            f"docker rm -f mc 2>/dev/null; "
+            f"docker run -d "
+            f"--name mc "
+            f"--restart unless-stopped "
+            f"-p {port}:{port}/tcp "
+            f"-p {port}:{port}/udp "
+            f"-e EULA=TRUE "
+            f"-e VERSION={version} "
+            f"-e TYPE=VANILLA "
+            f"-e MEMORY={memory}G "
+            f"-e ONLINE_MODE={online_mode} "
+            f"-e MAX_PLAYERS={max_players} "
+            f"-e VIEW_DISTANCE={view_distance} "
+            f"-e ENABLE_RCON={enable_rcon} "
+            f'-e MOTD="{motd}" '
+            f"-v /opt/minecraft/data:/data "
+            f"itzg/minecraft-server"
+        )
+
+        _, stdout, stderr = ssh_exec(ssh, docker_run, timeout=120)
+        if stderr and "Error" in stderr:
+            print(f"  [WARN] Docker output: {stderr}")
+
+        print("  Waiting for server to start...")
+        time.sleep(15)
+
+        # Check status
+        _, new_status, _ = ssh_exec(ssh, "docker inspect mc --format '{{.State.Status}}' 2>/dev/null")
+        if new_status == "running":
+            print(f"\n  Server is now running vanilla {version}")
+        else:
+            print(f"\n  [WARN] Container status: {new_status}")
+            _, logs, _ = ssh_exec(ssh, "docker logs mc --tail 20 2>&1")
+            if logs:
+                print(f"  Recent logs:\n{logs}")
+
+    finally:
+        ssh.close()
+
+    print("Done.\n")
+
+
 # ─── Server Configuration ────────────────────────────────────────────────────
 
 def cmd_set_version(version):
@@ -745,6 +1215,8 @@ def main():
 Commands:
   status                       Show server status
   install <name>               Search and install a mod from Modrinth
+  install-pack <name>          Search and install a modpack from Modrinth
+  uninstall-pack               Remove modpack and revert to vanilla
   remove <name>                Remove an installed mod
   list                         List installed mods
   set-version <version>        Change Minecraft version (e.g. 1.21)
@@ -765,6 +1237,11 @@ Valid server types: vanilla, forge, fabric, paper, spigot, bukkit,
 
     install_parser = subparsers.add_parser("install", help="Install a mod")
     install_parser.add_argument("mod_name", help="Mod name or slug to search and install")
+
+    install_pack_parser = subparsers.add_parser("install-pack", help="Install a modpack from Modrinth")
+    install_pack_parser.add_argument("pack_name", help="Modpack name or slug to search and install")
+
+    subparsers.add_parser("uninstall-pack", help="Remove modpack and revert to vanilla")
 
     remove_parser = subparsers.add_parser("remove", help="Remove a mod")
     remove_parser.add_argument("mod_name", help="Mod name to remove")
@@ -793,6 +1270,8 @@ Valid server types: vanilla, forge, fabric, paper, spigot, bukkit,
     commands = {
         "status": cmd_status,
         "install": lambda: cmd_install(args.mod_name),
+        "install-pack": lambda: cmd_install_pack(args.pack_name),
+        "uninstall-pack": cmd_uninstall_pack,
         "remove": lambda: cmd_remove(args.mod_name),
         "list": cmd_list,
         "set-version": lambda: cmd_set_version(args.version),

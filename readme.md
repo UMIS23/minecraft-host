@@ -101,6 +101,22 @@ python3 mc_manager.py install <mod_name>
 
 Searches Modrinth for the mod, lets you pick from results, downloads the `.jar` file, and uploads it to the server's mods folder. Optionally restarts the server to apply.
 
+#### Install a Modpack
+
+```bash
+python3 mc_manager.py install-pack <pack_name>
+```
+
+Searches Modrinth for modpacks, lets you pick one, downloads the `.mrpack` file, extracts overrides and additional mods, removes known client-side mods (Iris, Sodium, etc.), updates the server type automatically, and restarts the server. Includes automatic crash detection and problematic mod removal.
+
+#### Uninstall a Modpack
+
+```bash
+python3 mc_manager.py uninstall-pack
+```
+
+Removes all mods, config files, and modpack data from the server. Resets the server type to vanilla and restarts. Optionally deletes world data (you'll be prompted). Use this to revert to a clean vanilla server after removing a modpack.
+
 #### Remove a Mod
 
 ```bash
