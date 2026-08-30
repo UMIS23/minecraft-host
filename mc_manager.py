@@ -736,7 +736,7 @@ def cmd_start():
 
 
 def cmd_console():
-    """Attach to server console (interactive). Type 'exit' to leave."""
+    """Attach to server console via RCON. Type commands like: say Hello, op player, stop."""
     ip = get_server_ip()
     if not ip:
         print("[ERROR] Server IP not found. Run 'terraform apply' first.")
@@ -748,9 +748,14 @@ def cmd_console():
         print(f"[ERROR] SSH key not found: {key_path}")
         sys.exit(1)
 
-    print("Connecting to server console... (type 'exit' to leave)")
     user = config.get("ssh_user", "ubuntu")
-    os.execvp("ssh", ["ssh", "-t", "-i", key_path, f"{user}@{ip}", "docker attach mc"])
+    print("Connecting to server console... (type 'exit' to leave)\n")
+    print("Commands: say <msg>, op <player>, whitelist <on/off>, stop, list, etc.\n")
+    rcon_cmd = (
+        "PASS=$(grep 'rcon.password=' /data/server.properties | cut -d'=' -f2) && "
+        "docker exec -e RCON_PASSWORD=$PASS mc rcon-cli --password $PASS"
+    )
+    os.execvp("ssh", ["ssh", "-t", "-i", key_path, f"{user}@{ip}", rcon_cmd])
 
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
