@@ -752,7 +752,7 @@ def cmd_console():
     print("Connecting to server console... (type 'exit' to leave)\n")
     print("Commands: say <msg>, op <player>, whitelist <on/off>, stop, list, etc.\n")
     rcon_cmd = (
-        "PASS=$(grep 'rcon.password=' /data/server.properties | cut -d'=' -f2) && "
+        "PASS=$(docker exec mc grep 'rcon.password=' /data/server.properties | cut -d'=' -f2) && "
         "docker exec -e RCON_PASSWORD=$PASS mc rcon-cli --password $PASS"
     )
     os.execvp("ssh", ["ssh", "-t", "-i", key_path, f"{user}@{ip}", rcon_cmd])
