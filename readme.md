@@ -42,6 +42,35 @@ terraform plan
 terraform apply
 ```
 
+After deployment, note the server IP from the output.
+
+---
+
+### 5. Connect via SSH
+
+```bash
+ssh -i key1.pem ubuntu@<SERVER_IP>
+```
+
+Replace `<SERVER_IP>` with the IP shown in the Terraform output (or run `terraform output ssh_ip`).
+
+---
+
+### 6. Server Console (RCON)
+
+To interact with the Minecraft server console directly:
+
+```bash
+ssh -i key1.pem ubuntu@<SERVER_IP> "docker exec -it mc rcon-cli --password \$(docker exec mc grep rcon.password= /data/server.properties | cut -d'=' -f2)"
+```
+
+Useful RCON commands:
+- `list` — Show online players
+- `say <message>` — Broadcast a message
+- `op <player>` — Make a player operator
+- `whitelist on/off` — Toggle whitelist
+- `stop` — Stop the server
+
 ---
 
 ## Minecraft Server Manager (`mc_manager.py`)
@@ -125,12 +154,4 @@ python3 mc_manager.py start
 - **restart** — Restarts the Docker container. Use after installing/removing mods or changing settings.
 - **stop** — Stops the server completely. Players cannot connect.
 - **start** — Starts a stopped server container.
-
-#### Server Console
-
-```bash
-python3 mc_manager.py console
-```
-
-Attaches to the server console. Lets you run server commands like `stop`, `say`, `op <player>`, etc. Type `exit` to disconnect.
 
