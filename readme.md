@@ -49,22 +49,22 @@ After deployment, note the server IP from the output.
 ### 5. Connect via SSH
 
 ```bash
-ssh -i key1.pem ubuntu@<SERVER_IP>
+ssh ubuntu@<SERVER_IP>
 ```
 
 Replace `<SERVER_IP>` with the IP shown in the Terraform output (or run `terraform output ssh_ip`).
 
 ---
 
-### 6. Server Console (RCON)
+### 6. Server Console
 
-To interact with the Minecraft server console directly:
+After connecting via SSH, run:
 
 ```bash
-ssh -i key1.pem ubuntu@<SERVER_IP> "docker exec -it mc rcon-cli --password \$(docker exec mc grep rcon.password= /data/server.properties | cut -d'=' -f2)"
+sudo docker exec -it mc rcon-cli
 ```
 
-Useful RCON commands:
+Useful commands:
 - `list` — Show online players
 - `say <message>` — Broadcast a message
 - `op <player>` — Make a player operator
