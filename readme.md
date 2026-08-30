@@ -40,4 +40,135 @@ Open your terminal in the project directory and run the following commands:
 terraform init
 terraform plan
 terraform apply
+```
+
+---
+
+## Minecraft Server Manager (`mc_manager.py`)
+
+A Python CLI tool to manage your Minecraft server remotely via SSH. Install/remove mods, change server version or type, and monitor server status — all from your local terminal.
+
+### Setup
+
+```bash
+pip install -r requirements.txt
+```
+
+### Commands
+
+#### Server Status
+
+```bash
+python3 mc_manager.py status
+```
+
+Shows container status, port availability, CPU/memory usage, Java version, disk usage, and server properties.
+
+#### Install a Mod
+
+```bash
+python3 mc_manager.py install <mod_name>
+```
+
+Searches Modrinth for the mod, lets you pick from results, downloads the `.jar` file, and uploads it to the server's mods folder. Optionally restarts the server to apply.
+
+**Example:**
+```bash
+python3 mc_manager.py install lithium
+```
+
+#### Remove a Mod
+
+```bash
+python3 mc_manager.py remove <mod_name>
+```
+
+Finds and removes a mod file from the server. Supports partial name matching. If multiple mods match, you'll be prompted to select which one to remove.
+
+**Example:**
+```bash
+python3 mc_manager.py remove lithium
+```
+
+#### List Installed Mods
+
+```bash
+python3 mc_manager.py list
+```
+
+Lists all `.jar` mod files in the server's mods directory with file sizes.
+
+#### Search for Mods
+
+```bash
+python3 mc_manager.py mods search <query>
+```
+
+Searches Modrinth for mods matching your query. Returns up to 15 results with names, download counts, and descriptions. Use the slug name from results to install.
+
+**Example:**
+```bash
+python3 mc_manager.py mods search "performance"
+```
+
+#### Change Server Version
+
+```bash
+python3 mc_manager.py set-version <version>
+```
+
+Stops the current container, updates the Minecraft version, and recreates the container with the new version. Data (world, mods, configs) is preserved.
+
+**Example:**
+```bash
+python3 mc_manager.py set-version 1.21.4
+```
+
+#### Change Server Type
+
+```bash
+python3 mc_manager.py set-type <type>
+```
+
+Switches between server types. The server will restart with the new type.
+
+**Valid types:** `vanilla`, `forge`, `fabric`, `paper`, `spigot`, `bukkit`, `purpur`, `sponge`, `velocity`, `quilt`, `neoforge`, `bedrock`
+
+**Example:**
+```bash
+python3 mc_manager.py set-type paper
+```
+
+#### Change Server MOTD
+
+```bash
+python3 mc_manager.py set-motd <message>
+```
+
+Updates the Message of the Day (the text shown in the Minecraft server list).
+
+**Example:**
+```bash
+python3 mc_manager.py set-motd "Welcome to My Server!"
+```
+
+#### Restart / Stop / Start
+
+```bash
+python3 mc_manager.py restart
+python3 mc_manager.py stop
+python3 mc_manager.py start
+```
+
+- **restart** — Restarts the Docker container. Use after installing/removing mods or changing settings.
+- **stop** — Stops the server completely. Players cannot connect.
+- **start** — Starts a stopped server container.
+
+#### Server Console
+
+```bash
+python3 mc_manager.py console
+```
+
+Attaches to the server console. Lets you run server commands like `stop`, `say`, `op <player>`, etc. Type `exit` to disconnect.
 

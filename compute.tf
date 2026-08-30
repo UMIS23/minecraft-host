@@ -148,6 +148,7 @@ resource "oci_core_instance" "mc_server" {
       apt-get install -y docker.io
       systemctl start docker
       systemctl enable docker
+      usermod -aG docker ubuntu
 
       mkdir -p /opt/minecraft/data
       chmod -R 777 /opt/minecraft/data
@@ -159,6 +160,7 @@ resource "oci_core_instance" "mc_server" {
         -p ${local.config.server_port}:${local.config.server_port}/udp \
         -e EULA=TRUE \
         -e VERSION=${local.config.minecraft_version} \
+        -e TYPE=${upper(local.config.server_type)} \
         -e MEMORY=${local.config.ram_gb}G \
         -e ONLINE_MODE=${upper(tostring(local.config.online_mode))} \
         -e MAX_PLAYERS=${local.config.max_players} \
