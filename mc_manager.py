@@ -737,12 +737,20 @@ def cmd_start():
 
 def cmd_console():
     """Attach to server console (interactive). Type 'exit' to leave."""
-    print("Connecting to server console... (type 'exit' to leave)")
     ip = get_server_ip()
+    if not ip:
+        print("[ERROR] Server IP not found. Run 'terraform apply' first.")
+        sys.exit(1)
+
     config = load_config()
     key_path = str(Path(os.path.expanduser(config.get("ssh_key_path", "~/.ssh/id_rsa"))))
+    if not Path(key_path).exists():
+        print(f"[ERROR] SSH key not found: {key_path}")
+        sys.exit(1)
 
-    os.system(f"ssh -i {key_path} {config.get('ssh_user', 'ubuntu')}@{ip} \"docker attach mc\"")
+    print("Connecting to server console... (type 'exit' to leave)")
+    user = config.get("ssh_user", "ubuntu")
+    os.execvp("ssh", ["ssh", "-t", "-i", key_path, f"{user}@{ip}", "docker attach mc"])
 
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
