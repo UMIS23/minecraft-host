@@ -1,0 +1,13 @@
+{
+  "minecraft_version": "1.21.1",
+  "server_type": "vanilla",
+  "ram_gb": 16,
+  "server_port": 25565,
+  "max_players": 20,
+  "online_mode": false,
+  "view_distance": 20,
+  "server_name": "A Cool Server",
+  "enable_rcon": true,
+  "ssh_user": "ubuntu",
+  "ssh_key_path": "~/.ssh/id_rsa"
+}
