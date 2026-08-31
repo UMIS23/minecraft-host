@@ -31,7 +31,7 @@ Log in to the Oracle Cloud Console:
 3. Paste the information collected above into the matching sections of the file and save it.
 4. Copy `config.example.json` to `config.json` and edit it with your preferred Minecraft server settings (version, RAM, MOTD, etc.).
 
-> **Note:** `terraform.tfvars` and `config.json` are gitignored for security. A `.example` file is provided for each — copy and rename them, then fill in your own values before deploying.
+> 
 
 ---
 
