@@ -84,14 +84,17 @@ A Python CLI tool to manage your Minecraft server remotely via SSH. Install/remo
 
 ```bash
 pip install -r requirements.txt
+chmod +x mc_manager.py
 ```
+
+> **Windows:** Use `python mc_manager.py` instead of `./mc_manager.py` (e.g. `python mc_manager.py status`).
 
 ### Commands
 
 #### Server Status
 
 ```bash
-python3 mc_manager.py status
+./mc_manager.py status
 ```
 
 Shows container status, port availability, CPU/memory usage, Java version, disk usage, and server properties.
@@ -99,7 +102,7 @@ Shows container status, port availability, CPU/memory usage, Java version, disk 
 #### Install a Mod
 
 ```bash
-python3 mc_manager.py install <mod_name>
+./mc_manager.py install <mod_name>
 ```
 
 Searches Modrinth for the mod, lets you pick from results, downloads the `.jar` file, and uploads it to the server's mods folder. Optionally restarts the server to apply.
@@ -107,7 +110,7 @@ Searches Modrinth for the mod, lets you pick from results, downloads the `.jar` 
 #### Install a Modpack
 
 ```bash
-python3 mc_manager.py install-pack <pack_name>
+./mc_manager.py install-pack <pack_name>
 ```
 
 Searches Modrinth for modpacks, lets you pick one, downloads the `.mrpack` file, extracts overrides and additional mods, removes known client-side mods (Iris, Sodium, etc.), updates the server type automatically, and restarts the server. Includes automatic crash detection and problematic mod removal.
@@ -115,7 +118,7 @@ Searches Modrinth for modpacks, lets you pick one, downloads the `.mrpack` file,
 #### Uninstall a Modpack
 
 ```bash
-python3 mc_manager.py uninstall-pack
+./mc_manager.py uninstall-pack
 ```
 
 Removes all mods, config files, and modpack data from the server. Resets the server type to vanilla and restarts. Optionally deletes world data (you'll be prompted). Use this to revert to a clean vanilla server after removing a modpack.
@@ -123,7 +126,7 @@ Removes all mods, config files, and modpack data from the server. Resets the ser
 #### Remove a Mod
 
 ```bash
-python3 mc_manager.py remove <mod_name>
+./mc_manager.py remove <mod_name>
 ```
 
 Finds and removes a mod file from the server. Supports partial name matching. If multiple mods match, you'll be prompted to select which one to remove.
@@ -131,7 +134,7 @@ Finds and removes a mod file from the server. Supports partial name matching. If
 #### List Installed Mods
 
 ```bash
-python3 mc_manager.py list
+./mc_manager.py list
 ```
 
 Lists all `.jar` mod files in the server's mods directory with file sizes.
@@ -139,7 +142,7 @@ Lists all `.jar` mod files in the server's mods directory with file sizes.
 #### Change Server Version
 
 ```bash
-python3 mc_manager.py set-version <version>
+./mc_manager.py set-version <version>
 ```
 
 Stops the current container, updates the Minecraft version, and recreates the container with the new version. Data (world, mods, configs) is preserved.
@@ -147,7 +150,7 @@ Stops the current container, updates the Minecraft version, and recreates the co
 #### Change Server Type
 
 ```bash
-python3 mc_manager.py set-type <type>
+./mc_manager.py set-type <type>
 ```
 
 Switches between server types. The server will restart with the new type.
@@ -157,7 +160,7 @@ Switches between server types. The server will restart with the new type.
 #### Change Server MOTD
 
 ```bash
-python3 mc_manager.py set-motd <message>
+./mc_manager.py set-motd <message>
 ```
 
 Updates the Message of the Day (the text shown in the Minecraft server list).
@@ -165,9 +168,9 @@ Updates the Message of the Day (the text shown in the Minecraft server list).
 #### Restart / Stop / Start
 
 ```bash
-python3 mc_manager.py restart
-python3 mc_manager.py stop
-python3 mc_manager.py start
+./mc_manager.py restart
+./mc_manager.py stop
+./mc_manager.py start
 ```
 
 - **restart** — Restarts the Docker container. Use after installing/removing mods or changing settings.
