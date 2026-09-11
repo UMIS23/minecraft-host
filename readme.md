@@ -1,65 +1,65 @@
-# MC Sunucu Otomasyonu
+# MC Server Automation
 
-Oracle Cloud Free Tier üzerinde tek komutla Minecraft sunucusu kurar, web panelinden yönetirsin.
+Deploy a Minecraft server on Oracle Cloud Free Tier with a single command and manage it through a web panel.
 
 ---
 
-## Kurulum
+## Setup
 
-### 1. Oracle Cloud Credential'ları Topla
+### 1. Gather Oracle Cloud Credentials
 
-[Oracle Cloud Console](https://cloud.oracle.com) adresine giriş yap ve şunları kopyala:
+Log in to [Oracle Cloud Console](https://cloud.oracle.com) and copy the following:
 
-- **Tenancy OCID:** Profile (sağ üst) -> Tenancy -> Copy OCID
+- **Tenancy OCID:** Profile (top right) -> Tenancy -> Copy OCID
 - **User OCID:** Profile -> Copy OCID
-- **Compartment OCID:** Menu (sol üst) -> Identity & Security -> Compartments -> compartment seç -> Copy OCID
-- **Region Key:** Developer Tools (profile solu) -> Cloud shell -> Üstte yazıyor
+- **Compartment OCID:** Menu (top left) -> Identity & Security -> Compartments -> select your compartment -> Copy OCID
+- **Region Key:** Developer Tools (left of profile) -> Cloud shell -> shown at the top
 
-### 2. Oracle API Key Oluştur ve İndir
+### 2. Create Oracle API Key
 
-1. Profile -> Tokens and Keys -> API Keys (sol menüden)
-2. **Add API Key** -> **Generate API Key Pair** seç
-3. **Private Key**'i indir ve proje klasörüne koy (dosya adı önemli değil, `.pem` uzantılı olsun)
-4. **Add** de, oluşan **Fingerprint**'i kopyala
-5. Terminalde private key'e yetki ver: `chmod 400 indirdigin_key.pem`
+1. Profile -> Tokens and Keys -> API Keys (left menu)
+2. Click **Add API Key** -> Select **Generate API Key Pair**
+3. Download the **Private Key** (`.pem` file) and place it in the project folder
+4. Click **Add** and copy the generated **Fingerprint**
+5. Set key permissions: `chmod 400 your_key.pem`
 
-### 3. SSH Anahtarı Oluştur ve Oracle'a Yükle
+### 3. Create SSH Key and Upload to Oracle
 
-Sunucuya bağlanmak için SSH anahtarı lazım. Terminalde:
+You need an SSH key to connect to the server. Run in terminal:
 
 ```bash
 ssh-keygen -t ed25519 -f my_key -N ""
 ```
 
-Bu iki dosya oluşturur: `my_key` (özel) ve `my_key.pub` (açık).
+This creates two files: `my_key` (private) and `my_key.pub` (public).
 
-Şimdi Oracle'a yükle:
-1. Profile -> My Profile -> SSH Keys (sol menüden)
-2. **Add Public Key** tıkla
-3. `my_key.pub` dosyasının içeriğini aç, kopyala ve yapıştır
-4. **Add** de
+Upload the public key to Oracle:
+1. Profile -> My Profile -> SSH Keys (left menu)
+2. Click **Add Public Key**
+3. Open `my_key.pub`, copy its contents and paste
+4. Click **Add**
 
-### 4. Dosyaları Yapılandır
+### 4. Configure Files
 
-Proje klasöründe `terraform.tfvars.example` ve `config.example.json` dosyaları var. Bunları kopyala:
+Copy the example files in the project folder:
 
 ```bash
 cp terraform.tfvars.example terraform.tfvars
 cp config.example.json config.json
 ```
 
-**terraform.tfvars** dosyasını düzenle. İçinde şunlar olmalı:
+Edit **terraform.tfvars** with your Oracle credentials:
 
 ```
-tenancy_ocid     = "ocid1.tenancy.oc1..buraya..."
-user_ocid        = "ocid1.user.oc1..buraya..."
-compartment_ocid = "ocid1.tenancy.oc1..buraya..."  (veya kendi compartment'ın)
-fingerprint      = "xx:xx:xx:xx:..."
-private_key_path = "indirdigin_key.pem"  (2. adımda indirdiğin dosya)
-region_key       = "il-jerusalem-1"  (veya kendi bölgen)
+tenancy_ocid     = "ocid1.tenancy.oc1..your_value_here"
+user_ocid        = "ocid1.user.oc1..your_value_here"
+compartment_ocid = "ocid1.tenancy.oc1..your_value_here"
+fingerprint      = "xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx"
+private_key_path = "your_key.pem"
+region_key       = "il-jerusalem-1"
 ```
 
-**config.json** dosyasını düzenle. İçinde şunlar olmalı:
+Edit **config.json** with your Minecraft server settings:
 
 ```json
 {
@@ -80,7 +80,7 @@ region_key       = "il-jerusalem-1"  (veya kendi bölgen)
 
 ### 5. Deploy
 
-Terminalde proje klasöründe:
+Run in the project folder:
 
 ```bash
 terraform init
@@ -88,75 +88,75 @@ terraform plan
 terraform apply
 ```
 
-`yes` de ve bekle. İşlem 5-10 dakika sürebilir. Bitince terminalde SSH IP'si çıkacak, onu kopyala.
+Type `yes` and wait. It takes 5-10 minutes. When done, an SSH IP will appear in the terminal output. Copy it.
 
 ---
 
-## Bağlantı
+## Connecting
 
-### SSH ile Sunucuya Bağlan
+### SSH to Server
 
-Yeni bir terminal aç:
-
-```bash
-ssh -i my_key ubuntu@<ÇIKAN_IP>
-```
-
-### Web Paneline Eriş
-
-Panel sunucuda çalışıyor ama doğrudan erişilemez. SSH tunnel aç:
-
-Yeni bir terminal aç:
+Open a new terminal:
 
 ```bash
-ssh -i my_key -L 8080:localhost:80 ubuntu@<ÇIKAN_IP>
+ssh -i my_key ubuntu@<THE_IP_FROM_OUTPUT>
 ```
 
-Bu komut terminali açık tut. Şimdi tarayıcıda aç:
+### Access Web Panel
+
+The panel runs on the server but is not publicly accessible. Open an SSH tunnel:
+
+Open a new terminal:
+
+```bash
+ssh -i my_key -L 8080:localhost:80 ubuntu@<THE_IP_FROM_OUTPUT>
+```
+
+Keep this terminal open. Now open in your browser:
 
 ```
 http://localhost:8080
 ```
 
-Panel açıldı. Her şeyi buradan yönetebilirsin.
+The panel is ready. Manage everything from here.
 
 ---
 
-## Web Paneli
+## Web Panel
 
 ### Dashboard
-- Sunucu durumu (Running / Stopped)
-- IP, versiyon, sunucu türü
-- RAM ve CPU kullanımı
-- Start / Stop / Restart butonları
+- Server status (Running / Stopped)
+- IP, version, server type
+- RAM and CPU usage
+- Start / Stop / Restart buttons
 
 ### Logs
-Sunucu loglarını görüntüle. 50-500 arası satır seçebilirsin.
+View server logs. Choose between 50-500 lines.
 
 ### Mods
-- Modrinth'te mod ara ve yükle
-- Yüklü modları gör ve kaldır
+- Search and install mods from Modrinth
+- View and remove installed mods
 
 ### Modpacks
-- Modrinth'te modpack ara ve kur
-- Yüklü modpack'i gör ve tek tıkla kaldır
+- Search and install modpacks from Modrinth
+- View and uninstall installed modpack with one click
 
 ### Players
-- OP yönetimi
-- Whitelist yönetimi
-- Ban listesi yönetimi
+- OP management
+- Whitelist management
+- Ban list management
 
 ### Settings
-- Minecraft versiyonu ve sunucu türü
-- RAM, max oyuncu, view distance
+- Minecraft version and server type
+- RAM, max players, view distance
 - MOTD, online mode, RCON
 
 ---
 
-## Desteklenen Sunucu Türleri
+## Supported Server Types
 
 `vanilla`, `forge`, `fabric`, `paper`, `spigot`, `bukkit`, `purpur`, `quilt`, `neoforge`
 
-## Desteklenen MC Versiyonları
+## Supported MC Versions
 
-1.16.x ve üzeri (Java 17 / Java 21)
+1.16.x and above (Java 17 / Java 21)
