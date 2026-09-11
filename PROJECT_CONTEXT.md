@@ -230,20 +230,10 @@ Tüm yönetim işlemleri web paneli üzerinden yapılacak. Kullanıcı sadece te
 ### Kısa Vadeli
 - [ ] **Test Coverage** — Birim testleri ve entegrasyon testleri eklenmesi
 - [ ] **Error Handling** — Daha detaylı hata yönetimi ve kullanıcı bildirimleri
-- [ ] **Logging** — Structured logging sistemi kurulması
-- [ ] **API Versioning** — REST API versiyonlama
 
 ### Orta Vadeli
-- [ ] **Otomatik Yedekleme** — Düzenli world backup mekanizması
 - [ ] **Monitoring** — CPU/RAM/disk monitoring dashboard'u
 - [ ] **Bildirim Sistemi** — Discord webhook / email bildirimleri
-- [ ] **Çoklu Sunucu Desteği** — Birden fazla MC sunucusu yönetimi
-
-### Uzun Vadeli
-- [ ] **Multi-Cloud** — AWS, GCP desteği
-- [ ] **Websocket** — Gerçek zamanlı log akışı
-- [ ] **Auth Sistemi** — Kullanıcı girişi ve rol yönetimi
-- [ ] **Backup & Restore** — Otomatik yedekleme ve geri yükleme
 
 ---
 
