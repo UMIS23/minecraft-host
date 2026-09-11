@@ -7,13 +7,53 @@
 <div class="alert alert-{{ result_type }}">{{ result_msg }}</div>
 {% endif %}
 
+<div class="tabs">
+    <a href="/mods?type=mod&q={{ query }}" class="tab {% if active_type == 'mod' %}active{% endif %}">Mods</a>
+    <a href="/mods?type=modpack&q={{ query }}" class="tab {% if active_type == 'modpack' %}active{% endif %}">Modpacks</a>
+</div>
+
 <div class="card full-width">
+    {% if active_type == 'modpack' %}
+    <h3>Search Modpacks (Modrinth)</h3>
+    <form method="get" action="/mods" class="form-row">
+        <input type="hidden" name="type" value="modpack">
+        <input type="text" name="q" value="{{ query }}" placeholder="Search modpacks (e.g. skyblock, rlcraft...)" class="input" required>
+        <button type="submit" class="btn btn-blue">Search</button>
+    </form>
+    {% else %}
     <h3>Search Mods (Modrinth)</h3>
     <form method="get" action="/mods" class="form-row">
+        <input type="hidden" name="type" value="mod">
         <input type="text" name="q" value="{{ query }}" placeholder="Search mods (e.g. jei, create, sodium...)" class="input" required>
         <button type="submit" class="btn btn-blue">Search</button>
     </form>
+    {% endif %}
 </div>
+
+{% if active_type == 'modpack' %}
+<div class="card full-width">
+    <h3>Installed Modpack</h3>
+    {% if installed_modpack %}
+    <div class="modpack-info">
+        <div class="modpack-details">
+            <div class="modpack-name">{{ installed_modpack.name }}</div>
+            {% if installed_modpack.version %}
+            <div class="modpack-version">{{ installed_modpack.version }}</div>
+            {% endif %}
+            {% if installed_modpack.description %}
+            <div class="modpack-desc">{{ installed_modpack.description }}</div>
+            {% endif %}
+        </div>
+        <form method="post" action="/mods/uninstall-pack" style="display:inline"
+              onsubmit="return confirm('Bu modpack kaldırılacak ve sunucu vanilla moda dönecek. Emin misin?')">
+            <button type="submit" class="btn btn-red btn-sm">Uninstall Pack</button>
+        </form>
+    </div>
+    {% else %}
+    <p class="empty-state">No modpack installed</p>
+    {% endif %}
+</div>
+{% endif %}
 
 {% if search_results %}
 <div class="card full-width">
@@ -26,16 +66,24 @@
                 <div class="mod-desc">{{ mod.description }}</div>
                 <div class="mod-meta">{{ mod.downloads }} downloads</div>
             </div>
+            {% if active_type == 'modpack' %}
+            <form method="post" action="/mods/install-pack" style="display:inline">
+                <input type="hidden" name="pack_name" value="{{ mod.slug }}">
+                <button type="submit" class="btn btn-green btn-sm">Install Pack</button>
+            </form>
+            {% else %}
             <form method="post" action="/mods/install" style="display:inline">
                 <input type="hidden" name="mod_name" value="{{ mod.slug }}">
                 <button type="submit" class="btn btn-green btn-sm">Install</button>
             </form>
+            {% endif %}
         </div>
         {% endfor %}
     </div>
 </div>
 {% endif %}
 
+{% if active_type == 'mod' %}
 <div class="card full-width">
     <h3>Installed Mods ({{ mods|length }})</h3>
     {% if mods %}
@@ -61,4 +109,5 @@
     <p class="empty-state">No mods installed</p>
     {% endif %}
 </div>
+{% endif %}
 {% endblock %}

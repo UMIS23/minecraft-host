@@ -15,6 +15,27 @@ from app.ssh_client import (
     is_configured, CONFIG_FILE,
 )
 
+MODRINTH_API = "https://api.modrinth.com/v2"
+
+LOADER_MAP = {
+    "forge": "forge", "fabric": "fabric", "paper": "paper",
+    "spigot": "spigot", "purpur": "purpur",
+    "quilt": "quilt", "neoforge": "neoforge",
+}
+
+CLIENT_ONLY_MODS = [
+    "iris", "irisfixes", "oculus", "embeddium", "rubidium", "optifine", "optifog",
+    "sodium", "sodium-extra", "sodiumextras", "sodiumdynamiclights",
+    "sodiumoptionsapi", "sodiumoptionsmodcompat", "reeses_sodium_options",
+    "entity_texture_features", "entity_model_features", "skinlayers3d",
+    "dynamiclights", "lambdynamiclights", "betterclouds", "smartlighting",
+    "continuity", "immediatelyfast", "lithium", "ferritecore", "lazydfu", "starlight",
+    "cavedust", "voidfog", "modmenu", "zoomify", "minihud", "tweakeroo",
+    "xaerominimap", "xaeroworldmap", "journeymap", "inventoryhud", "craftpresence",
+    "presencefootsteps", "sound-physics-remastered", "notenoughanimations",
+    "player-animation-lib", "colorwheel", "colorwheel_patcher", "geckolib-fabric",
+]
+
 app = FastAPI(title="MC Server Panel")
 
 BASE_DIR = Path(__file__).parent
@@ -84,16 +105,29 @@ async def logs(request: Request, lines: int = 100):
 
 
 @app.get("/mods", response_class=HTMLResponse)
-async def mods_page(request: Request, q: str = ""):
+async def mods_page(request: Request, q: str = "", type: str = "mod"):
     if not is_configured():
         return RedirectResponse("/settings", status_code=303)
     mod_list = []
     search_results = []
+    installed_modpack = None
     try:
         ssh = ssh_connect()
         _, stdout, _ = ssh_exec(ssh, "ls /opt/minecraft/data/mods/ 2>/dev/null")
         if stdout and "No such file" not in stdout:
             mod_list = [m for m in stdout.strip().split("\n") if m.strip().endswith(".jar")]
+
+        _, index_out, _ = ssh_exec(ssh, "cat /opt/minecraft/data/modrinth.index.json 2>/dev/null", timeout=10)
+        if index_out and index_out.strip().startswith("{"):
+            try:
+                index_data = json.loads(index_out)
+                installed_modpack = {
+                    "name": index_data.get("name", "Unknown Modpack"),
+                    "version": index_data.get("versionId", ""),
+                    "description": index_data.get("summary", ""),
+                }
+            except json.JSONDecodeError:
+                pass
         ssh.close()
     except Exception:
         pass
@@ -103,21 +137,18 @@ async def mods_page(request: Request, q: str = ""):
             config = load_config()
             version = config.get("minecraft_version", "")
             loader = config.get("server_type", "vanilla")
-            loader_map = {
-                "forge": "forge", "fabric": "fabric", "paper": "paper",
-                "spigot": "spigot", "purpur": "purpur",
-            }
-            modrinth_loader = loader_map.get(loader)
+            modrinth_loader = LOADER_MAP.get(loader)
 
             params = {"query": q, "limit": 10, "index": "relevance"}
-            facets = [["project_type:mod"]]
+            project_type = "modpack" if type == "modpack" else "mod"
+            facets = [[f"project_type:{project_type}"]]
             if version:
                 facets.append([f"versions:{version}"])
             if modrinth_loader:
                 facets.append([f"categories:{modrinth_loader}"])
             params["facets"] = json.dumps(facets)
 
-            resp = requests.get("https://api.modrinth.com/v2/search", params=params, timeout=15)
+            resp = requests.get(f"{MODRINTH_API}/search", params=params, timeout=15)
             resp.raise_for_status()
             hits = resp.json().get("hits", [])
             for h in hits:
@@ -135,6 +166,8 @@ async def mods_page(request: Request, q: str = ""):
         "mods": mod_list,
         "search_results": search_results,
         "query": q,
+        "active_type": type,
+        "installed_modpack": installed_modpack,
     })
 
 
@@ -156,12 +189,7 @@ async def mod_install(request: Request):
             config = load_config()
             version = config["minecraft_version"]
             loader = config.get("server_type", "vanilla")
-
-            loader_map = {
-                "forge": "forge", "fabric": "fabric", "paper": "paper",
-                "spigot": "spigot", "purpur": "purpur",
-            }
-            modrinth_loader = loader_map.get(loader)
+            modrinth_loader = LOADER_MAP.get(loader)
 
             params = {"query": mod_name, "limit": 5, "index": "relevance"}
             facets = [["project_type:mod"]]
@@ -171,7 +199,7 @@ async def mod_install(request: Request):
                 facets.append([f"categories:{modrinth_loader}"])
             params["facets"] = json.dumps(facets)
 
-            resp = requests.get("https://api.modrinth.com/v2/search", params=params, timeout=15)
+            resp = requests.get(f"{MODRINTH_API}/search", params=params, timeout=15)
             resp.raise_for_status()
             hits = resp.json().get("hits", [])
 
@@ -183,7 +211,7 @@ async def mod_install(request: Request):
                 project_id = top["slug"] or top["project_id"]
                 title = top["title"]
 
-                resp_v = requests.get(f"https://api.modrinth.com/v2/project/{project_id}/version", timeout=15)
+                resp_v = requests.get(f"{MODRINTH_API}/project/{project_id}/version", timeout=15)
                 resp_v.raise_for_status()
                 all_versions = resp_v.json()
 
@@ -249,6 +277,224 @@ async def mod_install(request: Request):
         "result_msg": result_msg,
         "result_type": result_type,
     })
+
+
+@app.post("/mods/install-pack")
+async def modpack_install(request: Request):
+    if not is_configured():
+        return RedirectResponse("/settings", status_code=303)
+    form = await request.form()
+    pack_name = form.get("pack_name", "")
+    result_msg = ""
+    result_type = "info"
+
+    if not pack_name:
+        result_msg = "Modpack adı boş olamaz."
+        result_type = "error"
+    else:
+        try:
+            config = load_config()
+            version = config["minecraft_version"]
+
+            params = {"query": pack_name, "limit": 5, "index": "relevance"}
+            facets = [["project_type:modpack"]]
+            if version:
+                facets.append([f"versions:{version}"])
+            params["facets"] = json.dumps(facets)
+
+            resp = requests.get(f"{MODRINTH_API}/search", params=params, timeout=15)
+            resp.raise_for_status()
+            hits = resp.json().get("hits", [])
+
+            if not hits:
+                result_msg = f"'{pack_name}' için modpack bulunamadı."
+                result_type = "error"
+            else:
+                top = hits[0]
+                project_id = top["slug"] or top["project_id"]
+                title = top["title"]
+
+                resp_v = requests.get(f"{MODRINTH_API}/project/{project_id}/version", timeout=15)
+                resp_v.raise_for_status()
+                all_versions = resp_v.json()
+
+                versions = [v for v in all_versions if version in v.get("game_versions", [])]
+                if not versions:
+                    prefix = ".".join(version.split(".")[:2])
+                    versions = [v for v in all_versions if any(pv.startswith(prefix) for pv in v.get("game_versions", []))]
+
+                if not versions:
+                    result_msg = f"{title} için uyumlu versiyon bulunamadı (MC {version})."
+                    result_type = "error"
+                else:
+                    ver_data = versions[0]
+                    files = ver_data.get("files", [])
+                    if not files:
+                        result_msg = "Dosya bulunamadı."
+                        result_type = "error"
+                    else:
+                        primary = next((f for f in files if f.get("primary")), files[0])
+                        download_url = primary["url"]
+                        filename = primary["filename"]
+                        new_server_type = ver_data.get("loaders", ["vanilla"])[0] if ver_data.get("loaders") else "vanilla"
+                        matched_mc = ver_data.get("game_versions", [version])[0]
+
+                        ssh = ssh_connect()
+                        try:
+                            ssh_exec(ssh, "docker stop mc", timeout=30)
+
+                            r = requests.get(download_url, timeout=120, stream=True)
+                            r.raise_for_status()
+                            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".mrpack")
+                            for chunk in r.iter_content(chunk_size=8192):
+                                tmp.write(chunk)
+                            tmp.close()
+
+                            sftp = ssh.open_sftp()
+                            sftp.put(tmp.name, f"/tmp/{filename}")
+                            sftp.close()
+                            os.unlink(tmp.name)
+
+                            extract_script = f"""#!/usr/bin/env python3
+import zipfile, os, shutil
+modpack = '/tmp/{filename}'
+extract_dir = '/tmp/modpack_extract'
+data_dir = '/opt/minecraft/data'
+if os.path.exists(extract_dir):
+    shutil.rmtree(extract_dir)
+with zipfile.ZipFile(modpack, 'r') as z:
+    z.extractall(extract_dir)
+overrides = os.path.join(extract_dir, 'overrides')
+if os.path.isdir(overrides):
+    for item in os.listdir(overrides):
+        src = os.path.join(overrides, item)
+        dst = os.path.join(data_dir, item)
+        if os.path.isdir(src):
+            shutil.copytree(src, dst, dirs_exist_ok=True)
+        else:
+            shutil.copy2(src, dst)
+print('OVERRIDES_DONE')
+"""
+                            sftp = ssh.open_sftp()
+                            with sftp.open("/tmp/extract_modpack.py", "w") as f:
+                                f.write(extract_script)
+                            sftp.close()
+                            ssh_exec(ssh, "sudo python3 /tmp/extract_modpack.py && sudo rm /tmp/extract_modpack.py", timeout=120)
+
+                            download_mods_script = """#!/usr/bin/env python3
+import json, urllib.request, os
+with open('/tmp/modpack_extract/modrinth.index.json') as f:
+    index = json.load(f)
+data_dir = '/opt/minecraft/data'
+downloaded = 0
+for fi in index.get('files', []):
+    path = fi.get('path', '')
+    dest = os.path.join(data_dir, path)
+    if os.path.exists(dest):
+        continue
+    url = fi.get('downloads', [None])[0]
+    if not url:
+        continue
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    try:
+        urllib.request.urlretrieve(url, dest)
+        downloaded += 1
+    except Exception:
+        pass
+print(f'DONE:{downloaded}')
+"""
+                            sftp = ssh.open_sftp()
+                            with sftp.open("/tmp/download_modpack.py", "w") as f:
+                                f.write(download_mods_script)
+                            sftp.close()
+                            ssh_exec(ssh, "sudo python3 /tmp/download_modpack.py && sudo rm /tmp/download_modpack.py", timeout=300)
+
+                            ssh_exec(ssh, "sudo mkdir -p /opt/minecraft/data/mods-quarantine")
+                            _, mods_list, _ = ssh_exec(ssh, "ls /opt/minecraft/data/mods/ 2>/dev/null")
+                            if mods_list:
+                                for mod_file in mods_list.strip().split("\n"):
+                                    mod_lower = mod_file.lower()
+                                    for pattern in CLIENT_ONLY_MODS:
+                                        if pattern in mod_lower:
+                                            ssh_exec(ssh, f"sudo mv /opt/minecraft/data/mods/{mod_file} /opt/minecraft/data/mods-quarantine/")
+                                            break
+
+                            ssh_exec(ssh, "sudo chmod -R 777 /opt/minecraft/data && rm -rf /tmp/modpack_extract", timeout=30)
+
+                            loader_mapped = LOADER_MAP.get(new_server_type)
+                            if loader_mapped:
+                                config["server_type"] = loader_mapped
+                            config["minecraft_version"] = matched_mc
+                            save_config(config)
+
+                            java_tag = get_java_tag(matched_mc)
+                            memory = config.get("ram_gb", 16)
+                            port = config.get("server_port", 25565)
+                            online_mode = str(config.get("online_mode", False)).upper()
+                            max_players = config.get("max_players", 20)
+                            view_distance = config.get("view_distance", 20)
+                            enable_rcon = str(config.get("enable_rcon", True)).upper()
+                            motd = config.get("server_name", "MC Server")
+
+                            docker_run = build_docker_run(
+                                matched_mc, new_server_type, java_tag, memory, port,
+                                online_mode, max_players, view_distance, enable_rcon, motd
+                            )
+                            ssh_exec(ssh, docker_run, timeout=120)
+
+                            result_msg = f"{title} modpack'i kuruldu ({new_server_type}, MC {matched_mc}). Sunucu yeniden başlatıldı."
+                            result_type = "success"
+                        finally:
+                            ssh.close()
+        except Exception as e:
+            result_msg = f"Hata: {e}"
+            result_type = "error"
+
+    return RedirectResponse("/mods?type=modpack", status_code=303)
+
+
+@app.post("/mods/uninstall-pack")
+async def modpack_uninstall(request: Request):
+    if not is_configured():
+        return RedirectResponse("/settings", status_code=303)
+    try:
+        config = load_config()
+        ssh = ssh_connect()
+        try:
+            ssh_exec(ssh, "docker stop mc", timeout=30)
+
+            ssh_exec(ssh, "sudo rm -rf /opt/minecraft/data/mods")
+            ssh_exec(ssh, "sudo rm -rf /opt/minecraft/data/config")
+            ssh_exec(ssh, "sudo rm -rf /opt/minecraft/data/scripts")
+            ssh_exec(ssh, "sudo rm -f /opt/minecraft/data/modrinth.index.json")
+            ssh_exec(ssh, "sudo rm -f /opt/minecraft/data/.mrpack")
+            ssh_exec(ssh, "sudo rm -rf /opt/minecraft/data/crash-reports")
+            ssh_exec(ssh, "sudo chmod -R 777 /opt/minecraft/data", timeout=30)
+
+            config["server_type"] = "vanilla"
+            save_config(config)
+
+            version = config["minecraft_version"]
+            java_tag = get_java_tag(version)
+            memory = config.get("ram_gb", 16)
+            port = config.get("server_port", 25565)
+            online_mode = str(config.get("online_mode", False)).upper()
+            max_players = config.get("max_players", 20)
+            view_distance = config.get("view_distance", 20)
+            enable_rcon = str(config.get("enable_rcon", True)).upper()
+            motd = config.get("server_name", "MC Server")
+
+            docker_run = build_docker_run(
+                version, "vanilla", java_tag, memory, port,
+                online_mode, max_players, view_distance, enable_rcon, motd
+            )
+            ssh_exec(ssh, docker_run, timeout=120)
+        finally:
+            ssh.close()
+    except Exception:
+        pass
+
+    return RedirectResponse("/mods?type=modpack", status_code=303)
 
 
 @app.post("/mods/remove")
