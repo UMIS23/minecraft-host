@@ -3,51 +3,65 @@
 {% block content %}
 <h1>Sunucu Ayarları</h1>
 
+{% if not configured %}
+<div class="alert alert-info">
+    İlk kurulum: Sunucu IP adresinizi ve SSH ayarlarını girin.
+</div>
+{% endif %}
+
 <div class="card full-width">
     <form method="post" action="/settings">
         <div class="form-grid">
             <div class="form-group">
+                <label>Sunucu IP</label>
+                <input type="text" name="server_ip" value="{{ config.get('server_ip', '') }}" class="input" placeholder="ör: 1.2.3.4" required>
+            </div>
+            <div class="form-group">
+                <label>SSH Kullanıcı</label>
+                <input type="text" name="ssh_user" value="{{ config.get('ssh_user', 'ubuntu') }}" class="input">
+            </div>
+            <div class="form-group">
                 <label>Minecraft Versiyonu</label>
-                <input type="text" name="minecraft_version" value="{{ config.minecraft_version }}" class="input">
+                <input type="text" name="minecraft_version" value="{{ config.get('minecraft_version', '1.20.1') }}" class="input">
             </div>
             <div class="form-group">
                 <label>Sunucu Tipi</label>
                 <select name="server_type" class="select">
                     {% for t in ["vanilla", "forge", "fabric", "paper", "spigot", "bukkit", "purpur", "quilt", "neoforge"] %}
-                    <option value="{{ t }}" {% if config.server_type == t %}selected{% endif %}>{{ t }}</option>
+                    <option value="{{ t }}" {% if config.get('server_type', 'vanilla') == t %}selected{% endif %}>{{ t }}</option>
                     {% endfor %}
                 </select>
             </div>
             <div class="form-group">
                 <label>RAM (GB)</label>
-                <input type="number" name="ram_gb" value="{{ config.ram_gb }}" class="input" min="1" max="32">
+                <input type="number" name="ram_gb" value="{{ config.get('ram_gb', 4) }}" class="input" min="1" max="32">
             </div>
             <div class="form-group">
                 <label>Maks Oyuncu</label>
-                <input type="number" name="max_players" value="{{ config.max_players }}" class="input" min="1">
+                <input type="number" name="max_players" value="{{ config.get('max_players', 20) }}" class="input" min="1">
             </div>
             <div class="form-group">
                 <label>View Distance</label>
-                <input type="number" name="view_distance" value="{{ config.view_distance }}" class="input" min="1" max="32">
+                <input type="number" name="view_distance" value="{{ config.get('view_distance', 10) }}" class="input" min="1" max="32">
             </div>
             <div class="form-group">
                 <label>MOTD / Sunucu Adı</label>
-                <input type="text" name="server_name" value="{{ config.server_name }}" class="input">
+                <input type="text" name="server_name" value="{{ config.get('server_name', 'MC Server') }}" class="input">
             </div>
             <div class="form-group">
                 <label>
-                    <input type="checkbox" name="online_mode" {% if config.online_mode %}checked{% endif %}>
+                    <input type="checkbox" name="online_mode" {% if config.get('online_mode') %}checked{% endif %}>
                     Online Mode
                 </label>
             </div>
             <div class="form-group">
                 <label>
-                    <input type="checkbox" name="enable_rcon" {% if config.enable_rcon %}checked{% endif %}>
+                    <input type="checkbox" name="enable_rcon" {% if config.get('enable_rcon', true) %}checked{% endif %}>
                     RCON Aktif
                 </label>
             </div>
         </div>
-        <button type="submit" class="btn btn-green" style="margin-top: 1rem;">Kaydet & Yeniden Başlat</button>
+        <button type="submit" class="btn btn-green" style="margin-top: 1rem;">Kaydet</button>
     </form>
 </div>
 {% endblock %}

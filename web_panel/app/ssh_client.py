@@ -6,10 +6,30 @@ import paramiko
 
 CONFIG_FILE = Path(__file__).parent.parent.parent / "config.json"
 
+DEFAULT_CONFIG = {
+    "minecraft_version": "1.20.1",
+    "server_type": "vanilla",
+    "ram_gb": 4,
+    "server_port": 25565,
+    "max_players": 20,
+    "online_mode": False,
+    "view_distance": 10,
+    "server_name": "MC Server",
+    "enable_rcon": True,
+    "ssh_user": "ubuntu",
+    "ssh_key_path": "~/.ssh/id_rsa",
+    "server_ip": "",
+}
+
 
 def load_config():
+    if not CONFIG_FILE.exists():
+        return dict(DEFAULT_CONFIG)
     with open(CONFIG_FILE) as f:
-        return json.load(f)
+        config = json.load(f)
+    for key, val in DEFAULT_CONFIG.items():
+        config.setdefault(key, val)
+    return config
 
 
 def save_config(config):
@@ -22,17 +42,24 @@ def get_server_ip():
     return config.get("server_ip")
 
 
+def is_configured():
+    config = load_config()
+    return bool(config.get("server_ip"))
+
+
 def ssh_connect():
     config = load_config()
     ip = get_server_ip()
     if not ip:
-        raise Exception("Server IP not found in config.json.")
+        raise Exception("Sunucu IP'si ayarlanmamis. Ayarlardan config.json'i guncelleyin.")
 
     key_path = Path("/app/key1.pem")
     if not key_path.exists():
         key_path = Path(os.path.expanduser(config.get("ssh_key_path", "~/.ssh/id_rsa")))
     if not key_path.exists():
         key_path = Path("key1.pem")
+    if not key_path.exists():
+        raise Exception(f"SSH key bulunamadi: {key_path}")
 
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -114,6 +141,10 @@ def get_server_status():
         "resources": None,
         "players": [],
     }
+
+    if not is_configured():
+        result["error"] = "Config ayarlanmamis. /settings sayfasindan sunucu IP'sini girin."
+        return result
 
     try:
         ssh = ssh_connect()

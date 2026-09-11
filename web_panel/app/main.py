@@ -1,5 +1,5 @@
 import json
-import re
+import os
 import time
 from pathlib import Path
 
@@ -9,7 +9,7 @@ from fastapi.templating import Jinja2Templates
 from app.ssh_client import (
     load_config, save_config, ssh_connect, ssh_exec, docker_cmd,
     get_server_status, get_java_tag, build_docker_run, get_server_ip,
-    CONFIG_FILE,
+    is_configured, CONFIG_FILE,
 )
 
 app = FastAPI(title="MC Server Panel")
@@ -20,12 +20,16 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
+    if not is_configured():
+        return RedirectResponse("/settings", status_code=303)
     status = get_server_status()
     return templates.TemplateResponse("dashboard.html", {"request": request, "status": status})
 
 
 @app.post("/server/start")
 async def server_start():
+    if not is_configured():
+        return RedirectResponse("/settings", status_code=303)
     try:
         ssh = ssh_connect()
         ssh_exec(ssh, "docker start mc", timeout=30)
@@ -37,6 +41,8 @@ async def server_start():
 
 @app.post("/server/stop")
 async def server_stop():
+    if not is_configured():
+        return RedirectResponse("/settings", status_code=303)
     try:
         ssh = ssh_connect()
         ssh_exec(ssh, "docker stop mc", timeout=30)
@@ -48,6 +54,8 @@ async def server_stop():
 
 @app.post("/server/restart")
 async def server_restart():
+    if not is_configured():
+        return RedirectResponse("/settings", status_code=303)
     try:
         ssh = ssh_connect()
         ssh_exec(ssh, "docker restart mc", timeout=60)
@@ -59,6 +67,8 @@ async def server_restart():
 
 @app.get("/logs", response_class=HTMLResponse)
 async def logs(request: Request, lines: int = 100):
+    if not is_configured():
+        return RedirectResponse("/settings", status_code=303)
     log_output = ""
     try:
         ssh = ssh_connect()
@@ -71,6 +81,8 @@ async def logs(request: Request, lines: int = 100):
 
 @app.get("/mods", response_class=HTMLResponse)
 async def mods_page(request: Request):
+    if not is_configured():
+        return RedirectResponse("/settings", status_code=303)
     mod_list = []
     try:
         ssh = ssh_connect()
@@ -85,10 +97,13 @@ async def mods_page(request: Request):
 
 @app.post("/mods/install")
 async def mod_install(request: Request):
+    if not is_configured():
+        return RedirectResponse("/settings", status_code=303)
     form = await request.form()
     mod_name = form.get("mod_name", "")
     result_msg = ""
     result_type = "info"
+    mod_list = []
 
     if not mod_name:
         result_msg = "Mod adı boş olamaz."
@@ -154,7 +169,7 @@ async def mod_install(request: Request):
                         ssh = ssh_connect()
                         ssh_exec(ssh, "sudo mkdir -p /opt/minecraft/data/mods && sudo chmod 777 /opt/minecraft/data/mods")
 
-                        import tempfile, os
+                        import tempfile
                         r = requests.get(download_url, timeout=60, stream=True)
                         r.raise_for_status()
                         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".jar")
@@ -178,7 +193,15 @@ async def mod_install(request: Request):
             result_msg = f"Hata: {e}"
             result_type = "error"
 
-    status = get_server_status()
+    try:
+        ssh = ssh_connect()
+        _, stdout, _ = ssh_exec(ssh, "ls /opt/minecraft/data/mods/ 2>/dev/null")
+        if stdout and "No such file" not in stdout:
+            mod_list = [m for m in stdout.strip().split("\n") if m.strip().endswith(".jar")]
+        ssh.close()
+    except Exception:
+        pass
+
     return templates.TemplateResponse("mods.html", {
         "request": request,
         "mods": mod_list,
@@ -189,6 +212,8 @@ async def mod_install(request: Request):
 
 @app.post("/mods/remove")
 async def mod_remove(request: Request):
+    if not is_configured():
+        return RedirectResponse("/settings", status_code=303)
     form = await request.form()
     mod_name = form.get("mod_name", "")
     result_msg = ""
@@ -238,7 +263,7 @@ async def mod_remove(request: Request):
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request):
     config = load_config()
-    return templates.TemplateResponse("settings.html", {"request": request, "config": config})
+    return templates.TemplateResponse("settings.html", {"request": request, "config": config, "configured": is_configured()})
 
 
 @app.post("/settings")
@@ -246,16 +271,21 @@ async def settings_save(request: Request):
     form = await request.form()
     config = load_config()
 
-    config["minecraft_version"] = form.get("minecraft_version", config["minecraft_version"])
-    config["server_type"] = form.get("server_type", config["server_type"])
-    config["ram_gb"] = int(form.get("ram_gb", config["ram_gb"]))
-    config["max_players"] = int(form.get("max_players", config["max_players"]))
-    config["view_distance"] = int(form.get("view_distance", config["view_distance"]))
-    config["server_name"] = form.get("server_name", config["server_name"])
+    config["minecraft_version"] = form.get("minecraft_version", config.get("minecraft_version", "1.20.1"))
+    config["server_type"] = form.get("server_type", config.get("server_type", "vanilla"))
+    config["ram_gb"] = int(form.get("ram_gb", config.get("ram_gb", 4)))
+    config["max_players"] = int(form.get("max_players", config.get("max_players", 20)))
+    config["view_distance"] = int(form.get("view_distance", config.get("view_distance", 10)))
+    config["server_name"] = form.get("server_name", config.get("server_name", "MC Server"))
     config["online_mode"] = form.get("online_mode") == "on"
     config["enable_rcon"] = form.get("enable_rcon") == "on"
+    config["server_ip"] = form.get("server_ip", config.get("server_ip", ""))
+    config["ssh_user"] = form.get("ssh_user", config.get("ssh_user", "ubuntu"))
 
     save_config(config)
+
+    if not is_configured():
+        return RedirectResponse("/settings", status_code=303)
 
     version = config["minecraft_version"]
     java_tag = get_java_tag(version)
@@ -278,6 +308,8 @@ async def settings_save(request: Request):
 
 @app.get("/players", response_class=HTMLResponse)
 async def players_page(request: Request):
+    if not is_configured():
+        return RedirectResponse("/settings", status_code=303)
     ops = []
     whitelist = []
     bans = []
@@ -315,6 +347,8 @@ async def players_page(request: Request):
 
 @app.post("/players/op")
 async def player_op(request: Request):
+    if not is_configured():
+        return RedirectResponse("/settings", status_code=303)
     form = await request.form()
     player = form.get("player", "")
     if player:
@@ -329,6 +363,8 @@ async def player_op(request: Request):
 
 @app.post("/players/deop")
 async def player_deop(request: Request):
+    if not is_configured():
+        return RedirectResponse("/settings", status_code=303)
     form = await request.form()
     player = form.get("player", "")
     if player:
@@ -343,6 +379,8 @@ async def player_deop(request: Request):
 
 @app.post("/players/whitelist-add")
 async def whitelist_add(request: Request):
+    if not is_configured():
+        return RedirectResponse("/settings", status_code=303)
     form = await request.form()
     player = form.get("player", "")
     if player:
@@ -357,6 +395,8 @@ async def whitelist_add(request: Request):
 
 @app.post("/players/whitelist-remove")
 async def whitelist_remove(request: Request):
+    if not is_configured():
+        return RedirectResponse("/settings", status_code=303)
     form = await request.form()
     player = form.get("player", "")
     if player:
@@ -371,6 +411,8 @@ async def whitelist_remove(request: Request):
 
 @app.post("/players/ban")
 async def player_ban(request: Request):
+    if not is_configured():
+        return RedirectResponse("/settings", status_code=303)
     form = await request.form()
     player = form.get("player", "")
     reason = form.get("reason", "Banned by admin")
@@ -386,6 +428,8 @@ async def player_ban(request: Request):
 
 @app.post("/players/pardon")
 async def player_pardon(request: Request):
+    if not is_configured():
+        return RedirectResponse("/settings", status_code=303)
     form = await request.form()
     player = form.get("player", "")
     if player:
