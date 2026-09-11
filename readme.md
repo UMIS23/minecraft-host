@@ -6,41 +6,60 @@ Oracle Cloud Free Tier üzerinde tek komutla Minecraft sunucusu kurar, web panel
 
 ## Kurulum
 
-### 1. Oracle Cloud Credential'ları
+### 1. Oracle Cloud Credential'ları Topla
 
-[Oracle Cloud Console](https://cloud.oracle.com) adresine giriş yap:
+[Oracle Cloud Console](https://cloud.oracle.com) adresine giriş yap ve şunları kopyala:
 
 - **Tenancy OCID:** Profile (sağ üst) -> Tenancy -> Copy OCID
 - **User OCID:** Profile -> Copy OCID
 - **Compartment OCID:** Menu (sol üst) -> Identity & Security -> Compartments -> compartment seç -> Copy OCID
 - **Region Key:** Developer Tools (profile solu) -> Cloud shell -> Üstte yazıyor
 
-### 2. API Key Oluştur
+### 2. Oracle API Key Oluştur ve İndir
 
 1. Profile -> Tokens and Keys -> API Keys (sol menüden)
 2. **Add API Key** -> **Generate API Key Pair** seç
-3. **Private Key**'i (`.pem` dosyası) proje klasörüne indir
+3. **Private Key**'i indir ve proje klasörüne koy (dosya adı önemli değil, `.pem` uzantılı olsun)
 4. **Add** de, oluşan **Fingerprint**'i kopyala
-5. Terminalde: `chmod 400 key.pem`
+5. Terminalde private key'e yetki ver: `chmod 400 indirdigin_key.pem`
 
-### 3. SSH Anahtarı Oluştur
+### 3. SSH Anahtarı Oluştur ve Oracle'a Yükle
+
+Sunucuya bağlanmak için SSH anahtarı lazım. Terminalde:
 
 ```bash
 ssh-keygen -t ed25519 -f my_key -N ""
 ```
 
-Bu komut `my_key` (özel anahtar) ve `my_key.pub` (açık anahtar) dosyalarını oluşturur. Her iki dosya da proje kök dizininde olmalı.
+Bu iki dosya oluşturur: `my_key` (özel) ve `my_key.pub` (açık).
 
-### 4. Değişkenleri Yapılandır
+Şimdi Oracle'a yükle:
+1. Profile -> My Profile -> SSH Keys (sol menüden)
+2. **Add Public Key** tıkla
+3. `my_key.pub` dosyasının içeriğini aç, kopyala ve yapıştır
+4. **Add** de
+
+### 4. Dosyaları Yapılandır
+
+Proje klasöründe `terraform.tfvars.example` ve `config.example.json` dosyaları var. Bunları kopyala:
 
 ```bash
 cp terraform.tfvars.example terraform.tfvars
 cp config.example.json config.json
 ```
 
-**terraform.tfvars** dosyasını düzenle — Oracle credential'ları yapıştır.
+**terraform.tfvars** dosyasını düzenle. İçinde şunlar olmalı:
 
-**config.json** dosyasını düzenle — Minecraft sunucu ayarları:
+```
+tenancy_ocid     = "ocid1.tenancy.oc1..buraya..."
+user_ocid        = "ocid1.user.oc1..buraya..."
+compartment_ocid = "ocid1.tenancy.oc1..buraya..."  (veya kendi compartment'ın)
+fingerprint      = "xx:xx:xx:xx:..."
+private_key_path = "indirdigin_key.pem"  (2. adımda indirdiğin dosya)
+region_key       = "il-jerusalem-1"  (veya kendi bölgen)
+```
+
+**config.json** dosyasını düzenle. İçinde şunlar olmalı:
 
 ```json
 {
@@ -49,12 +68,19 @@ cp config.example.json config.json
   "ram_gb": 16,
   "server_port": 25565,
   "max_players": 20,
+  "online_mode": false,
+  "view_distance": 20,
   "server_name": "A Cool Server",
-  "ssh_user": "ubuntu"
+  "enable_rcon": true,
+  "ssh_user": "ubuntu",
+  "ssh_key_path": "~/.ssh/id_rsa",
+  "server_ip": ""
 }
 ```
 
 ### 5. Deploy
+
+Terminalde proje klasöründe:
 
 ```bash
 terraform init
@@ -62,65 +88,65 @@ terraform plan
 terraform apply
 ```
 
-Deploy sonrası terminalde SSH IP'si çıkacak. Bunu kopyala.
+`yes` de ve bekle. İşlem 5-10 dakika sürebilir. Bitince terminalde SSH IP'si çıkacak, onu kopyala.
 
 ---
 
 ## Bağlantı
 
-### SSH ile Bağlan
+### SSH ile Sunucuya Bağlan
+
+Yeni bir terminal aç:
 
 ```bash
-ssh -i my_key ubuntu@<SSH_IP>
+ssh -i my_key ubuntu@<ÇIKAN_IP>
 ```
 
 ### Web Paneline Eriş
 
-Panel sadece SSH tunnel üzerinden erişilebilir. Yeni bir terminal aç:
+Panel sunucuda çalışıyor ama doğrudan erişilemez. SSH tunnel aç:
+
+Yeni bir terminal aç:
 
 ```bash
-ssh -i my_key -L 8080:localhost:80 ubuntu@<SSH_IP>
+ssh -i my_key -L 8080:localhost:80 ubuntu@<ÇIKAN_IP>
 ```
 
-Tarayıcıda aç:
+Bu komut terminali açık tut. Şimdi tarayıcıda aç:
 
 ```
 http://localhost:8080
 ```
+
+Panel açıldı. Her şeyi buradan yönetebilirsin.
 
 ---
 
 ## Web Paneli
 
 ### Dashboard
-
-- Container durumu (Running / Stopped)
-- IP adresi, versiyon, tür
+- Sunucu durumu (Running / Stopped)
+- IP, versiyon, sunucu türü
 - RAM ve CPU kullanımı
 - Start / Stop / Restart butonları
 
 ### Logs
-
-Sunucu loglarını görüntüle. Satır sayısı seçebilirsin (50-500).
+Sunucu loglarını görüntüle. 50-500 arası satır seçebilirsin.
 
 ### Mods
-
-**Mods sekmesi:**
 - Modrinth'te mod ara ve yükle
 - Yüklü modları gör ve kaldır
 
-**Modpacks sekmesi:**
+### Modpacks
 - Modrinth'te modpack ara ve kur
 - Yüklü modpack'i gör ve tek tıkla kaldır
 
 ### Players
-
-- OP listesi (oyuncuya OP ver / al)
-- Whitelist (oyuncu ekle / kaldır)
-- Ban listesi (yasakla / affet)
+- OP yönetimi
+- Whitelist yönetimi
+- Ban listesi yönetimi
 
 ### Settings
-
 - Minecraft versiyonu ve sunucu türü
 - RAM, max oyuncu, view distance
 - MOTD, online mode, RCON
