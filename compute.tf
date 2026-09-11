@@ -237,12 +237,7 @@ resource "null_resource" "setup_panel" {
   }
 }
 
-output "mc_server_ip" {
-  value       = [for ip in oci_network_load_balancer_network_load_balancer.mc_nlb.ip_addresses : ip.ip_address if ip.is_public][0]
-  description = "Minecraft server IP (for players to connect)"
-}
-
 output "ssh_ip" {
   value       = oci_core_instance.mc_server.public_ip
-  description = "SSH IP (for admin access via terminal)"
+  description = "SSH IP (for admin access)"
 }

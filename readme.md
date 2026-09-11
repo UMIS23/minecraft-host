@@ -23,10 +23,17 @@ Oracle Cloud Free Tier üzerinde tek komutla Minecraft sunucusu kurar, web panel
 4. **Add** de, oluşan **Fingerprint**'i kopyala
 5. Terminalde: `chmod 400 key.pem`
 
-### 3. Değişkenleri Yapılandır
+### 3. SSH Anahtarı Oluştur
 
 ```bash
-# Örnek dosyaları kopyala
+ssh-keygen -t ed25519 -f key1.pem -N ""
+```
+
+Bu komut `key1.pem` (özel anahtar) ve `key1.pem.pub` (açık anahtar) dosyalarını oluşturur. Her iki dosya da proje kök dizininde olmalı.
+
+### 4. Değişkenleri Yapılandır
+
+```bash
 cp terraform.tfvars.example terraform.tfvars
 cp config.example.json config.json
 ```
@@ -38,7 +45,7 @@ cp config.example.json config.json
 ```json
 {
   "minecraft_version": "1.21.1",
-  "server_type": "forge",
+  "server_type": "vanilla",
   "ram_gb": 16,
   "server_port": 25565,
   "max_players": 20,
@@ -47,7 +54,7 @@ cp config.example.json config.json
 }
 ```
 
-### 4. Deploy
+### 5. Deploy
 
 ```bash
 terraform init
@@ -55,21 +62,38 @@ terraform plan
 terraform apply
 ```
 
-Deploy sonrası terminalde sunucu IP'si çıkacak. Bunu not et.
+Deploy sonrası terminalde SSH IP'si çıkacak. Bunu kopyala.
+
+---
+
+## Bağlantı
+
+### SSH ile Bağlan
+
+```bash
+ssh -i key1.pem ubuntu@<SSH_IP>
+```
+
+### Web Paneline Eriş
+
+Panel sadece SSH tunnel üzerinden erişilebilir. Yeni bir terminal aç:
+
+```bash
+ssh -i key1.pem -L 8080:localhost:80 ubuntu@<SSH_IP>
+```
+
+Tarayıcıda aç:
+
+```
+http://localhost:8080
+```
 
 ---
 
 ## Web Paneli
 
-Deploy sonrası sunucu otomatik olarak web panelini kurar. Tarayıcıdan sunucu IP'sine bağlan:
-
-```
-http://<SUNUCU_IP>
-```
-
 ### Dashboard
 
-Sunucu durumunu Görüntüle:
 - Container durumu (Running / Stopped)
 - IP adresi, versiyon, tür
 - RAM ve CPU kullanımı
@@ -77,7 +101,7 @@ Sunucu durumunu Görüntüle:
 
 ### Logs
 
-Sunucu loglarını tarayıcıdan görüntüle. Satır sayısı seçebilirsin (50-500).
+Sunucu loglarını görüntüle. Satır sayısı seçebilirsin (50-500).
 
 ### Mods
 
@@ -87,7 +111,7 @@ Sunucu loglarını tarayıcıdan görüntüle. Satır sayısı seçebilirsin (50
 
 **Modpacks sekmesi:**
 - Modrinth'te modpack ara ve kur
-- Yüklü modpack'i gör ve tek tıkla kaldır (vanilla moda dön)
+- Yüklü modpack'i gör ve tek tıkla kaldır
 
 ### Players
 
@@ -100,58 +124,6 @@ Sunucu loglarını tarayıcıdan görüntüle. Satır sayısı seçebilirsin (50
 - Minecraft versiyonu ve sunucu türü
 - RAM, max oyuncu, view distance
 - MOTD, online mode, RCON
-- SSH ayarları
-
----
-
-## CLI Yöneticisi (mc_manager.py)
-
-Web paneline alternatif olarak terminal üzerinden de yönetebilirsin:
-
-```bash
-pip install -r requirements.txt
-chmod +x mc_manager.py
-```
-
-### Komutlar
-
-| Komut | Açıklama |
-|-------|----------|
-| `./mc_manager.py status` | Sunucu durumunu göster |
-| `./mc_manager.py install <mod>` | Mod yükle |
-| `./mc_manager.py install-pack <pack>` | Modpack kur |
-| `./mc_manager.py install-map <file>` | Harita yükle |
-| `./mc_manager.py remove <mod>` | Mod kaldır |
-| `./mc_manager.py list` | Yüklü modları listele |
-| `./mc_manager.py uninstall-pack` | Modpack kaldır (vanilla'ya dön) |
-| `./mc_manager.py set-version <ver>` | MC versiyonunu değiştir |
-| `./mc_manager.py set-type <type>` | Sunucu türünü değiştir |
-| `./mc_manager.py set-motd <msg>` | MOTD değiştir |
-| `./mc_manager.py restart` | Sunucuyu yeniden başlat |
-| `./mc_manager.py stop` | Sunucuyu durdur |
-| `./mc_manager.py start` | Sunucuyu başlat |
-
----
-
-## SSH (İleri Düzey)
-
-Sadece gelişmiş işlemler veya sorun giderme için gerekli:
-
-```bash
-ssh ubuntu@<SUNUCU_IP>
-```
-
-Docker konsolu:
-```bash
-sudo docker exec -it mc rcon-cli
-```
-
-Faydalı rcon komutları:
-- `list` — Online oyuncuları göster
-- `say <mesaj>` — Herkese mesaj gönder
-- `op <oyuncu>` — Oyuncuya OP ver
-- `whitelist on/off` — Whitelist aç/kapat
-- `stop` — Sunucuyu durdur
 
 ---
 
