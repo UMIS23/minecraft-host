@@ -26,10 +26,10 @@ Oracle Cloud Free Tier üzerinde tek komutla Minecraft sunucusu kurar, web panel
 ### 3. SSH Anahtarı Oluştur
 
 ```bash
-ssh-keygen -t ed25519 -f key1.pem -N ""
+ssh-keygen -t ed25519 -f my_key -N ""
 ```
 
-Bu komut `key1.pem` (özel anahtar) ve `key1.pem.pub` (açık anahtar) dosyalarını oluşturur. Her iki dosya da proje kök dizininde olmalı.
+Bu komut `my_key` (özel anahtar) ve `my_key.pub` (açık anahtar) dosyalarını oluşturur. Her iki dosya da proje kök dizininde olmalı.
 
 ### 4. Değişkenleri Yapılandır
 
@@ -71,7 +71,7 @@ Deploy sonrası terminalde SSH IP'si çıkacak. Bunu kopyala.
 ### SSH ile Bağlan
 
 ```bash
-ssh -i key1.pem ubuntu@<SSH_IP>
+ssh -i my_key ubuntu@<SSH_IP>
 ```
 
 ### Web Paneline Eriş
@@ -79,7 +79,7 @@ ssh -i key1.pem ubuntu@<SSH_IP>
 Panel sadece SSH tunnel üzerinden erişilebilir. Yeni bir terminal aç:
 
 ```bash
-ssh -i key1.pem -L 8080:localhost:80 ubuntu@<SSH_IP>
+ssh -i my_key -L 8080:localhost:80 ubuntu@<SSH_IP>
 ```
 
 Tarayıcıda aç:
