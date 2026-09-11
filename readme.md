@@ -4,6 +4,24 @@ Deploy a Minecraft server on Oracle Cloud Free Tier with a single command and ma
 
 ---
 
+## Prerequisites
+
+Before you begin, make sure you have the following installed:
+
+- **Python 3.10+** -- [Download Python](https://www.python.org/downloads/)
+- **Terraform** -- [Install Terraform](https://developer.hashicorp.com/terraform/install)
+- **SSH client** -- Built-in on Linux/macOS, [install for Windows](https://docs.microsoft.com/windows/terminal/tutorials/ssh-tutorial)
+
+Verify your installations:
+
+```bash
+python3 --version
+terraform --version
+ssh -V
+```
+
+---
+
 ## Setup
 
 ### 1. Gather Oracle Cloud Credentials
@@ -77,6 +95,8 @@ Edit **config.json** with your Minecraft server settings:
   "server_ip": ""
 }
 ```
+
+> **Note:** The `server_ip` field will be filled automatically by Terraform after deployment. You do not need to set it manually.
 
 ### 5. Deploy
 

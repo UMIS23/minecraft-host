@@ -221,6 +221,12 @@ Terraform (.tf dosyaları)
 
 ## 6. Gelecek Adımlar ve Yol Haritası
 
+### Genel Vizyon
+Tüm yönetim işlemleri web paneli üzerinden yapılacak. Kullanıcı sadece terminalden web paneline bağlanma (SSH tunnel) işlemini yapacak. Oracle Cloud credentials (tenancy_ocid, user_ocid, compartment_ocid, fingerprint, private_key_path, region_key) web paneli arayüzünden girilip Terraform buradan çalıştırılacak.
+
+### Yakın Vadeli (Sıradaki Adım)
+- [ ] **Oracle ID Web Panel Entegrasyonu** — Web paneline Oracle Cloud credential formu eklenmesi. Kullanıcı OCI tenancy_ocid, user_ocid, compartment_ocid, fingerprint, private_key_path, region_key değerlerini web panelinden girecek. Web panel bu değerleri `terraform.tfvars` dosyasına yazarak Terraform'u uzaktan tetikleyecek. Böylece deploy işlemi tamamen web üzerinden yapılacak.
+
 ### Kısa Vadeli
 - [ ] **Test Coverage** — Birim testleri ve entegrasyon testleri eklenmesi
 - [ ] **Error Handling** — Daha detaylı hata yönetimi ve kullanıcı bildirimleri
