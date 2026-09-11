@@ -9,9 +9,12 @@ Commands:
     mc_manager.py status                     - Show server status and info
     mc_manager.py install <mod_name>         - Search and install a mod from Modrinth
     mc_manager.py install-pack <pack_name>   - Search and install a modpack from Modrinth
+    mc_manager.py install-map <file>          - Install a world map (.zip/.mcworld)
     mc_manager.py uninstall-pack             - Remove modpack and revert to vanilla
     mc_manager.py remove <mod_name>          - Remove an installed mod
     mc_manager.py list                       - List all installed mods
+    mc_manager.py quarantine                 - List quarantined (client-only) mods
+    mc_manager.py restore <mod_name>         - Restore a quarantined mod back to mods/
     mc_manager.py set-version <version>      - Change Minecraft version and restart
     mc_manager.py set-type <type>            - Change server type (forge, fabric, paper, etc.)
     mc_manager.py set-motd <message>         - Change server MOTD
@@ -24,6 +27,8 @@ Requires: paramiko, requests (pip install -r requirements.txt)
 
 import json
 import os
+import socket
+import struct
 import sys
 import time
 import tempfile
@@ -624,19 +629,40 @@ def download_modpack(project_id, version_id=None):
 
 
 CLIENT_ONLY_MODS = [
-    "colorwheel", "colorwheel_patcher", "iris", "irisfixes",
+    # Rendering / shaders
+    "iris", "irisfixes", "oculus",
+    "embeddium", "rubidium", "optifine", "optifog",
+    # Sodium ecosystem
     "sodium", "sodium-extra", "sodiumextras", "sodiumdynamiclights",
     "sodiumoptionsapi", "sodiumoptionsmodcompat", "reeses_sodium_options",
-    "skinlayers3d", "embeddium", "rubidium", "oculus",
-    "betterclouds", "lambdynamiclights", "smartlighting",
-    "continuity", "entityculling", "immediatelyfast", "lithium",
-    "ferritecore", "lazydfu", "starlight",
+    # Entity / texture features (ETF ecosystem)
+    "entity_texture_features", "entity_model_features",
+    # Skin layers
+    "skinlayers3d",
+    # Dynamic lights
+    "dynamiclights", "lambdynamiclights",
+    # Visual / rendering
+    "betterclouds", "smartlighting", "continuity",
+    "immediatelyfast", "lithium", "ferritecore", "lazydfu", "starlight",
+    # Fog / dust
+    "cavedust", "voidfog",
+    # Inventory / HUD / UI
     "modmenu", "zoomify", "minihud", "tweakeroo",
     "xaerominimap", "xaeroworldmap", "journeymap",
     "inventoryhud", "craftpresence", "keybindings",
+    "nemos_inventory_sorting", "nemos-inventory-sorting",
+    # Sound
     "presencefootsteps", "sound-physics-remastered",
+    # Animation
     "notenoughanimations", "player-animation-lib",
+    # Camera
     "better-third-person", "leawind_third_person",
+    # Client networking that breaks servers
+    "flerovium",
+    # Color / UI utils
+    "colorwheel", "colorwheel_patcher",
+    # Fabric-only mods that break Forge servers
+    "geckolib-fabric",
 ]
 
 
@@ -739,8 +765,9 @@ print(f'--- Summary: {downloaded} downloaded, {skipped} skipped, {failed} failed
 
 
 def cleanup_client_mods(ssh):
-    """Remove known client-side mods that don't work on a server."""
+    """Move known client-side mods to quarantine (not delete)."""
     print("  Removing known client-only mods...")
+    ssh_exec(ssh, "sudo mkdir -p /opt/minecraft/data/mods-quarantine")
     _, mods_list, _ = ssh_exec(ssh, "ls /opt/minecraft/data/mods/ 2>/dev/null")
     if mods_list:
         removed = 0
@@ -748,38 +775,54 @@ def cleanup_client_mods(ssh):
             mod_lower = mod_file.lower()
             for pattern in CLIENT_ONLY_MODS:
                 if pattern in mod_lower:
-                    ssh_exec(ssh, f"sudo rm -f /opt/minecraft/data/mods/{mod_file}")
-                    print(f"  Removed client mod: {mod_file}")
+                    ssh_exec(ssh, f"sudo mv /opt/minecraft/data/mods/{mod_file} /opt/minecraft/data/mods-quarantine/")
+                    print(f"  Quarantined: {mod_file}")
                     removed += 1
                     break
         if removed:
-            print(f"  Removed {removed} client-only mod(s)")
+            print(f"  Quarantined {removed} client-only mod(s)")
 
 
 def detect_crash_and_fix(ssh):
-    """Check server logs for client-mod crashes, remove the offending mod, restart."""
-    _, logs, _ = ssh_exec(ssh, "docker logs mc --tail 20 2>&1")
-    crash_mod = None
+    """Check server logs for client-mod crashes, remove the offending mod, restart.
+
+    Detects two patterns:
+      1. "Cannot load class ... environment type SERVER" (old pattern)
+      2. "LoadingFailedException ... has failed to load correctly ... invalid dist DEDICATED_SERVER"
+    """
+    _, logs, _ = ssh_exec(ssh, "docker logs mc --tail 40 2>&1")
+    crash_mods = []
     if logs:
-        for line in logs.split("\n"):
+        lines = logs.split("\n")
+        # Pattern 1: direct class load failure
+        for line in lines:
             if "Cannot load class" in line and "environment type SERVER" in line:
                 m = re.search(r"provided by '(\w+)'", line)
                 if m:
-                    crash_mod = m.group(1)
-                break
-            if "Failed to start" in line or "Exception" in line:
-                m = re.search(r"provided by '(\w+)'", line)
-                if m:
-                    crash_mod = m.group(1)
+                    crash_mods.append(m.group(1))
 
-    if crash_mod:
-        print(f"  Removing problematic mod: {crash_mod}")
-        ssh_exec(ssh, f"sudo rm -f /opt/minecraft/data/mods/*{crash_mod}* && sudo rm -f /opt/minecraft/data/mods/*{crash_mod.lower()}*", timeout=15)
-        _, found_mods, _ = ssh_exec(ssh, f"ls /opt/minecraft/data/mods/ | grep -i {crash_mod}")
-        if found_mods:
-            for mf in found_mods.strip().split("\n"):
-                if mf.strip():
-                    ssh_exec(ssh, f"sudo rm -f /opt/minecraft/data/mods/{mf}")
+        # Pattern 2: LoadingFailedException with invalid dist DEDICATED_SERVER
+        # e.g. "Nemo's Inventory Sorting (nemos_inventory_sorting) has failed to load correctly"
+        #      "java.lang.RuntimeException: Attempted to load class ... for invalid dist DEDICATED_SERVER"
+        if not crash_mods:
+            in_loading_block = False
+            for line in lines:
+                if "LoadingFailedException" in line or "has failed to load correctly" in line:
+                    in_loading_block = True
+                if in_loading_block and "invalid dist DEDICATED_SERVER" in line:
+                    # extract mod id from earlier line: "ModName (mod_id) has failed"
+                    for prev in lines[:lines.index(line)]:
+                        m = re.search(r"has failed to load correctly.*?(\w+)\) has failed", prev, re.DOTALL)
+                        if not m:
+                            m = re.search(r"\((\w+)\)\s+has failed", prev)
+                        if m:
+                            crash_mods.append(m.group(1))
+
+    if crash_mods:
+        ssh_exec(ssh, "sudo mkdir -p /opt/minecraft/data/mods-quarantine")
+        for mod_id in set(crash_mods):
+            print(f"  Quarantining problematic mod: {mod_id}")
+            ssh_exec(ssh, f"sudo find /opt/minecraft/data/mods/ -iname '*{mod_id}*' -exec mv {{}} /opt/minecraft/data/mods-quarantine/ \\;", timeout=15)
 
         print("  Restarting server...")
         ssh_exec(ssh, "docker restart mc", timeout=60)
@@ -912,6 +955,174 @@ def cmd_install_pack(pack_name):
 
     os.unlink(tmp_path)
     print("Done.\n")
+
+
+# ─── Map Management ──────────────────────────────────────────────────────────
+
+def cmd_install_map(map_file, resource_pack=None):
+    """Install a world map (.zip/.mcworld) on the server.
+
+    Extracts the map to /opt/minecraft/data/world and optionally installs
+    a resource pack to /opt/minecraft/data/resourcepacks/.
+    """
+    map_path = Path(map_file)
+    if not map_path.exists():
+        print(f"[ERROR] File not found: {map_file}")
+        return
+
+    suffix = map_path.suffix.lower()
+    if suffix not in (".zip", ".mcworld"):
+        print("[ERROR] Unsupported file format. Use .zip or .mcworld")
+        return
+
+    ssh = ssh_connect()
+    try:
+        print(f"\n{'='*60}")
+        print(f"  Installing Map: {map_path.name}")
+        print(f"{'='*60}")
+
+        print("  Stopping server...")
+        ssh_exec(ssh, "docker stop mc", timeout=30)
+
+        print("  Backing up current world...")
+        backup_name = f"world_backup_{int(time.time())}"
+        ssh_exec(ssh, f"sudo mkdir -p /opt/minecraft/backups && "
+                      f"sudo cp -r /opt/minecraft/data/world /opt/minecraft/backups/{backup_name} 2>/dev/null || true")
+        print(f"  Backup saved: /opt/minecraft/backups/{backup_name}")
+
+        print("  Removing old world...")
+        ssh_exec(ssh, "sudo rm -rf /opt/minecraft/data/world /opt/minecraft/data/world_nether /opt/minecraft/data/world_the_end")
+
+        print(f"  Uploading {map_path.name} to server...")
+        remote_tmp = f"/tmp/{map_path.name}"
+        sftp = ssh.open_sftp()
+        sftp.put(str(map_path), remote_tmp)
+        sftp.close()
+
+        print("  Extracting map...")
+        extract_script = f"""#!/usr/bin/env python3
+import zipfile, os, shutil
+
+src = '{remote_tmp}'
+data_dir = '/opt/minecraft/data'
+extract_dir = '/tmp/map_extract'
+
+if os.path.exists(extract_dir):
+    shutil.rmtree(extract_dir)
+os.makedirs(extract_dir)
+
+with zipfile.ZipFile(src, 'r') as z:
+    z.extractall(extract_dir)
+
+world_dir = None
+
+if os.path.isdir(os.path.join(extract_dir, 'world')):
+    world_dir = os.path.join(extract_dir, 'world')
+
+if not world_dir:
+    for root, dirs, files in os.walk(extract_dir):
+        if 'level.dat' in files:
+            world_dir = root
+            break
+
+if not world_dir:
+    for root, dirs, files in os.walk(extract_dir):
+        if 'region' in dirs:
+            parent = os.path.dirname(root)
+            if os.path.isfile(os.path.join(parent, 'level.dat')):
+                world_dir = parent
+            else:
+                world_dir = root
+            break
+
+if not world_dir:
+    world_dir = extract_dir
+
+dest = os.path.join(data_dir, 'world')
+if os.path.exists(dest):
+    shutil.rmtree(dest)
+shutil.copytree(world_dir, dest)
+print('WORLD_DONE')
+"""
+        sftp = ssh.open_sftp()
+        with sftp.open("/tmp/install_map.py", "w") as f:
+            f.write(extract_script)
+        sftp.close()
+
+        _, stdout, stderr = ssh_exec(ssh, "sudo python3 /tmp/install_map.py && sudo rm /tmp/install_map.py", timeout=120)
+        if "WORLD_DONE" in stdout:
+            print("  Map installed successfully.")
+        else:
+            print(f"  [WARN] Extract issue: {stderr}")
+
+        rp_path = Path(resource_pack) if resource_pack else None
+        if rp_path and rp_path.exists():
+            print(f"\n  Installing resource pack: {rp_path.name}")
+            remote_rp = f"/tmp/{rp_path.name}"
+            sftp = ssh.open_sftp()
+            sftp.put(str(rp_path), remote_rp)
+            sftp.close()
+            ssh_exec(ssh, "sudo mkdir -p /opt/minecraft/data/resourcepacks")
+            ssh_exec(ssh, f"sudo mv {remote_rp} /opt/minecraft/data/resourcepacks/")
+            print(f"  Resource pack uploaded: {rp_path.name}")
+
+            ssh_exec(ssh, docker_cmd(
+                f'sed -i "s|^resource-pack=.*|resource-pack={rp_path.name}|" /data/server.properties'
+            ))
+            ssh_exec(ssh, docker_cmd(
+                'sed -i "s|^resource-pack-sha1=.*|resource-pack-sha1=|" /data/server.properties'
+            ))
+            print("  Resource pack configured in server.properties.")
+        else:
+            print("  No resource pack provided, skipping.")
+
+        print("  Fixing permissions...")
+        ssh_exec(ssh, "sudo chmod -R 777 /opt/minecraft/data", timeout=30)
+
+        print("  Starting server...")
+        config = load_config()
+        version = config["minecraft_version"]
+        java_tag = get_java_tag(version)
+        memory = config.get("ram_gb", 16)
+        port = config.get("server_port", 25565)
+        online_mode = str(config.get("online_mode", False)).upper()
+        max_players = config.get("max_players", 20)
+        view_distance = config.get("view_distance", 20)
+        enable_rcon = str(config.get("enable_rcon", True)).upper()
+        motd = config.get("server_name", "A Cool Server")
+        server_type = config.get("server_type", "vanilla")
+
+        docker_run = build_docker_run(
+            version, server_type, java_tag, memory, port,
+            online_mode, max_players, view_distance, enable_rcon, motd
+        )
+
+        _, stdout, stderr = ssh_exec(ssh, docker_run, timeout=120)
+        if stderr and "Error" in stderr:
+            print(f"  [WARN] Docker output: {stderr}")
+
+        print("  Waiting for server to start...")
+        time.sleep(15)
+
+        _, new_status, _ = ssh_exec(ssh, "docker inspect mc --format '{{.State.Status}}' 2>/dev/null")
+        if new_status == "running":
+            print("\n  Server is running with new map.")
+        else:
+            print(f"\n  [WARN] Container status: {new_status}")
+            _, logs, _ = ssh_exec(ssh, "docker logs mc --tail 20 2>&1")
+            if logs:
+                print(f"  Recent logs:\n{logs}")
+
+        ssh_exec(ssh, f"rm -f {remote_tmp} 2>/dev/null; rm -rf /tmp/map_extract 2>/dev/null")
+
+    finally:
+        ssh.close()
+
+    print(f"\n{'='*60}")
+    print(f"  Map installed: {map_path.name}")
+    if rp_path and rp_path.exists():
+        print(f"  Resource pack: {rp_path.name}")
+    print(f"{'='*60}\n")
 
 
 def cmd_uninstall_pack():
@@ -1236,6 +1447,57 @@ def cmd_start():
         ssh.close()
 
 
+def cmd_quarantine():
+    """List quarantined mods."""
+    ssh = ssh_connect()
+    try:
+        _, stdout, _ = ssh_exec(ssh, "ls /opt/minecraft/data/mods-quarantine/ 2>/dev/null")
+        if not stdout or "No such file" in stdout:
+            print("\nNo quarantined mods.")
+            return
+
+        mods = [m for m in stdout.strip().split("\n") if m.strip()]
+        print(f"\n{'='*60}")
+        print(f"  Quarantined Mods ({len(mods)})")
+        print(f"{'='*60}")
+        for m in mods:
+            print(f"  - {m}")
+        print(f"{'='*60}\n")
+    finally:
+        ssh.close()
+
+
+def cmd_restore(mod_name):
+    """Restore a quarantined mod back to mods/."""
+    ssh = ssh_connect()
+    try:
+        _, stdout, _ = ssh_exec(ssh, "ls /opt/minecraft/data/mods-quarantine/ 2>/dev/null")
+        if not stdout:
+            print("No quarantined mods found.")
+            return
+
+        mods = [m for m in stdout.strip().split("\n") if m.strip()]
+        matching = [m for m in mods if mod_name.lower() in m.lower()]
+
+        if not matching:
+            print(f"No quarantined mod matching '{mod_name}'.")
+            print("Quarantined mods:")
+            for m in mods:
+                print(f"  - {m}")
+            return
+
+        for mod_file in matching:
+            ssh_exec(ssh, f"sudo mv /opt/minecraft/data/mods-quarantine/{mod_file} /opt/minecraft/data/mods/")
+            print(f"  Restored: {mod_file}")
+
+        restart = input("Restart server to load restored mod? (y/n): ").strip().lower()
+        if restart == "y":
+            ssh_exec(ssh, "docker restart mc", timeout=60)
+            print("Server restarted.")
+    finally:
+        ssh.close()
+
+
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
@@ -1248,9 +1510,12 @@ Commands:
   status                       Show server status
   install <name>               Search and install a mod from Modrinth
   install-pack <name>          Search and install a modpack from Modrinth
+  install-map <file>           Install a world map (.zip/.mcworld)
   uninstall-pack               Remove modpack and revert to vanilla
   remove <name>                Remove an installed mod
   list                         List installed mods
+  quarantine                   List quarantined (client-only) mods
+  restore <name>               Restore a quarantined mod back to mods/
   set-version <version>        Change Minecraft version (e.g. 1.21)
   set-type <type>              Change server type (forge, fabric, paper, etc.)
   set-motd <message>           Change server MOTD
@@ -1273,6 +1538,10 @@ Valid server types: vanilla, forge, fabric, paper, spigot, bukkit,
     install_pack_parser = subparsers.add_parser("install-pack", help="Install a modpack from Modrinth")
     install_pack_parser.add_argument("pack_name", help="Modpack name or slug to search and install")
 
+    install_map_parser = subparsers.add_parser("install-map", help="Install a world map")
+    install_map_parser.add_argument("map_file", help="Path to .zip or .mcworld file")
+    install_map_parser.add_argument("--resource-pack", "-r", help="Optional resource pack (.zip) to install", default=None)
+
     subparsers.add_parser("uninstall-pack", help="Remove modpack and revert to vanilla")
 
     remove_parser = subparsers.add_parser("remove", help="Remove a mod")
@@ -1292,6 +1561,10 @@ Valid server types: vanilla, forge, fabric, paper, spigot, bukkit,
     subparsers.add_parser("restart", help="Restart the server")
     subparsers.add_parser("stop", help="Stop the server")
     subparsers.add_parser("start", help="Start the server")
+    subparsers.add_parser("quarantine", help="List quarantined mods")
+
+    restore_parser = subparsers.add_parser("restore", help="Restore a quarantined mod")
+    restore_parser.add_argument("mod_name", help="Mod name to restore from quarantine")
 
     args = parser.parse_args()
 
@@ -1303,6 +1576,7 @@ Valid server types: vanilla, forge, fabric, paper, spigot, bukkit,
         "status": cmd_status,
         "install": lambda: cmd_install(args.mod_name),
         "install-pack": lambda: cmd_install_pack(args.pack_name),
+        "install-map": lambda: cmd_install_map(args.map_file, getattr(args, 'resource_pack', None)),
         "uninstall-pack": cmd_uninstall_pack,
         "remove": lambda: cmd_remove(args.mod_name),
         "list": cmd_list,
@@ -1312,6 +1586,8 @@ Valid server types: vanilla, forge, fabric, paper, spigot, bukkit,
         "restart": cmd_restart,
         "stop": cmd_stop,
         "start": cmd_start,
+        "quarantine": cmd_quarantine,
+        "restore": lambda: cmd_restore(args.mod_name),
     }
 
     cmd = commands.get(args.command)

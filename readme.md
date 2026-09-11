@@ -115,6 +115,34 @@ Searches Modrinth for the mod, lets you pick from results, downloads the `.jar` 
 
 Searches Modrinth for modpacks, lets you pick one, downloads the `.mrpack` file, extracts overrides and additional mods, removes known client-side mods (Iris, Sodium, etc.), updates the server type automatically, and restarts the server. Includes automatic crash detection and problematic mod removal.
 
+#### Install a Map
+
+```bash
+./mc_manager.py install-map <map_file>
+./mc_manager.py install-map <map_file> --resource-pack <pack.zip>
+```
+
+Installs a world map (`.zip` or `.mcworld`) on the server. The command automatically:
+
+1. Stops the server
+2. Backs up the current world to `/opt/minecraft/backups/`
+3. Uploads and extracts the map file to `/opt/minecraft/data/world/`
+4. Optionally installs a resource pack to `resourcepacks/` and configures `server.properties`
+5. Fixes permissions and restarts the server
+
+**Examples:**
+
+```bash
+# Install a world map
+./mc_manager.py install-map ./my_world.zip
+
+# Install with a resource pack
+./mc_manager.py install-map ./my_world.zip -r ./resourcepack.zip
+
+# Install a .mcworld file
+./mc_manager.py install-map ./parkour_map.mcworld
+```
+
 #### Uninstall a Modpack
 
 ```bash
