@@ -5,25 +5,25 @@
 
 <div class="status-grid">
     <div class="card">
-        <h3>Sunucu Durumu</h3>
+        <h3>Server Status</h3>
         <span class="status-badge {% if status.container_status == 'running' %}online{% else %}offline{% endif %}">
             {{ status.container_status }}
         </span>
     </div>
     <div class="card">
-        <h3>IP</h3>
+        <h3>IP Address</h3>
         <p class="mono">{{ status.server_ip }}:{{ status.port }}</p>
     </div>
     <div class="card">
-        <h3>Versiyon</h3>
+        <h3>Version</h3>
         <p>{{ status.version }} ({{ status.server_type }})</p>
     </div>
     <div class="card">
-        <h3>RAM</h3>
+        <h3>Memory</h3>
         <p>{{ status.ram_gb }} GB</p>
     </div>
     <div class="card">
-        <h3>Maks Oyuncu</h3>
+        <h3>Max Players</h3>
         <p>{{ status.max_players }}</p>
     </div>
     <div class="card">
@@ -34,14 +34,14 @@
 
 {% if status.resources %}
 <div class="card full-width">
-    <h3>Kaynak Kullanımı</h3>
+    <h3>Resource Usage</h3>
     <p class="mono">{{ status.resources }}</p>
 </div>
 {% endif %}
 
 {% if status.error %}
 <div class="card full-width error">
-    <h3>Hata</h3>
+    <h3>Error</h3>
     <p>{{ status.error }}</p>
 </div>
 {% endif %}

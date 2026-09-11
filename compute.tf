@@ -75,15 +75,6 @@ resource "oci_core_security_list" "mc_sl" {
 
   ingress_security_rules {
     protocol = "6" # TCP
-    source   = "0.0.0.0/0"
-    tcp_options {
-      min = 80
-      max = 80
-    }
-  }
-
-  ingress_security_rules {
-    protocol = "6" # TCP
     source   = "10.0.0.0/16"
     tcp_options {
       min = 25565
@@ -133,96 +124,84 @@ resource "oci_core_instance" "mc_server" {
   }
 
   metadata = {
-    ssh_authorized_keys = file("~/.ssh/id_rsa.pub")
-    user_data = base64encode(<<-EOF
-      #!/bin/bash
-      set -e
+    ssh_authorized_keys = file("key1.pem.pub")
+    user_data = base64encode(<<-USERDATA
+#!/bin/bash
+exec > /var/log/user-data.log 2>&1
+set -ex
 
-      iptables -F
-      iptables -X
-      iptables -t nat -F
-      iptables -t nat -X
-      iptables -t mangle -F
-      iptables -t mangle -X
-      iptables -P INPUT ACCEPT
-      iptables -P FORWARD ACCEPT
-      iptables -P OUTPUT ACCEPT
+echo "=== STEP 1: Firewall ==="
+iptables -F
+iptables -X
+iptables -t nat -F
+iptables -t nat -X
+iptables -t mangle -F
+iptables -t mangle -X
+iptables -P INPUT ACCEPT
+iptables -P FORWARD ACCEPT
+iptables -P OUTPUT ACCEPT
 
-      echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99force-ipv4
+echo "Acquire::ForceIPv4 \"true\";" > /etc/apt/apt.conf.d/99force-ipv4
 
-      apt-get update -y
-      DEBIAN_FRONTEND=noninteractive apt-get install -y netfilter-persistent iptables-persistent
-      netfilter-persistent save
+echo "=== STEP 2: Packages ==="
+apt-get update -y
+DEBIAN_FRONTEND=noninteractive apt-get install -y netfilter-persistent iptables-persistent docker.io docker-compose-v2
+netfilter-persistent save
 
-      apt-get install -y docker.io git
-      systemctl start docker
-      systemctl enable docker
-      usermod -aG docker ubuntu
+echo "=== STEP 3: Docker ==="
+systemctl start docker
+systemctl enable docker
+usermod -aG docker ubuntu
 
-      mkdir -p /opt/minecraft/data
-      chmod -R 777 /opt/minecraft/data
+echo "=== STEP 4: MC Server ==="
+mkdir -p /opt/minecraft/data /opt/minecraft/panel
+chmod -R 777 /opt/minecraft/data
 
-      docker run -d \
-        --name mc \
-        --restart unless-stopped \
-        -p ${local.config.server_port}:${local.config.server_port}/tcp \
-        -p ${local.config.server_port}:${local.config.server_port}/udp \
-        -e EULA=TRUE \
-        -e VERSION=${local.config.minecraft_version} \
-        -e TYPE=${upper(local.config.server_type)} \
-        -e MEMORY=${local.config.ram_gb}G \
-        -e ONLINE_MODE=${upper(tostring(local.config.online_mode))} \
-        -e MAX_PLAYERS=${local.config.max_players} \
-        -e VIEW_DISTANCE=${local.config.view_distance} \
-        -e ENABLE_RCON=${upper(tostring(local.config.enable_rcon))} \
-        -e MOTD="${local.config.server_name}" \
-        -v /opt/minecraft/data:/data \
-        itzg/minecraft-server
+docker run -d \
+  --name mc \
+  --restart unless-stopped \
+  -p ${local.config.server_port}:${local.config.server_port}/tcp \
+  -p ${local.config.server_port}:${local.config.server_port}/udp \
+  -e EULA=TRUE \
+  -e VERSION=${local.config.minecraft_version} \
+  -e TYPE=${upper(local.config.server_type)} \
+  -e MEMORY=${local.config.ram_gb}G \
+  -e ONLINE_MODE=${upper(tostring(local.config.online_mode))} \
+  -e MAX_PLAYERS=${local.config.max_players} \
+  -e VIEW_DISTANCE=${local.config.view_distance} \
+  -e ENABLE_RCON=${upper(tostring(local.config.enable_rcon))} \
+  -e MOTD="${local.config.server_name}" \
+  -v /opt/minecraft/data:/data \
+  itzg/minecraft-server
 
-      sleep 5
-      chmod -R 777 /opt/minecraft/data
+sleep 5
+chmod -R 777 /opt/minecraft/data
 
-      git clone --depth 1 --filter=blob:none --sparse https://github.com/UMIS23/minecraft-host.git /opt/minecraft/panel-repo
-      cd /opt/minecraft/panel-repo
-      git sparse-checkout set web_panel
-
-      mkdir -p /opt/minecraft/panel
-      cp web_panel/Dockerfile /opt/minecraft/panel/
-      cp web_panel/docker-compose.yml /opt/minecraft/panel/
-      cp web_panel/nginx.conf /opt/minecraft/panel/
-      cp web_panel/requirements.txt /opt/minecraft/panel/
-      cp -r web_panel/app /opt/minecraft/panel/
-      chmod 600 /opt/minecraft/panel/app/ssh_client.py
-      rm -rf /opt/minecraft/panel-repo
-
-      SERVER_IP=$(curl -s http://169.254.169.254/opc/v1/instance/metadata/public_ip)
-
-      cat <<JSONEOF > /opt/minecraft/panel/config.json
-{
-  "minecraft_version": "${local.config.minecraft_version}",
-  "server_type": "${local.config.server_type}",
-  "ram_gb": ${local.config.ram_gb},
-  "server_port": ${local.config.server_port},
-  "max_players": ${local.config.max_players},
-  "online_mode": ${tostring(local.config.online_mode)},
-  "view_distance": ${local.config.view_distance},
-  "server_name": "${local.config.server_name}",
-  "enable_rcon": ${tostring(local.config.enable_rcon)},
-  "ssh_user": "ubuntu",
-  "ssh_key_path": "~/.ssh/id_rsa",
-  "server_ip": "$SERVER_IP"
-}
-JSONEOF
-
-      mkdir -p /opt/minecraft/panel/data
-      cd /opt/minecraft/panel && docker compose up -d --build
-    EOF
+echo "=== USER_DATA COMPLETE ==="
+USERDATA
     )
   }
 }
 
-resource "null_resource" "upload_key" {
+resource "null_resource" "setup_panel" {
   depends_on = [oci_core_instance.mc_server]
+
+  triggers = {
+    instance_id = oci_core_instance.mc_server.id
+  }
+
+  provisioner "file" {
+    source      = "web_panel/"
+    destination = "/opt/minecraft/panel"
+
+    connection {
+      type        = "ssh"
+      host        = oci_core_instance.mc_server.public_ip
+      user        = "ubuntu"
+      private_key = file(var.private_key_path)
+      timeout     = "5m"
+    }
+  }
 
   provisioner "file" {
     source      = var.private_key_path
@@ -239,9 +218,13 @@ resource "null_resource" "upload_key" {
 
   provisioner "remote-exec" {
     inline = [
+      "sudo mkdir -p /opt/minecraft/panel/data",
+      "sudo chown -R ubuntu:ubuntu /opt/minecraft/panel",
       "sudo chmod 600 /opt/minecraft/panel/key1.pem",
-      "sudo chown root:root /opt/minecraft/panel/key1.pem",
-      "cd /opt/minecraft/panel && sudo docker compose restart panel"
+      "sudo chmod 600 /opt/minecraft/panel/app/ssh_client.py",
+      "cat > /tmp/config.json << 'JSONEOF'\n{\"minecraft_version\":\"${local.config.minecraft_version}\",\"server_type\":\"${local.config.server_type}\",\"ram_gb\":${local.config.ram_gb},\"server_port\":${local.config.server_port},\"max_players\":${local.config.max_players},\"online_mode\":${tostring(local.config.online_mode)},\"view_distance\":${local.config.view_distance},\"server_name\":\"${local.config.server_name}\",\"enable_rcon\":${tostring(local.config.enable_rcon)},\"ssh_user\":\"ubuntu\",\"ssh_key_path\":\"/app/key1.pem\",\"server_ip\":\"${oci_core_instance.mc_server.public_ip}\"}\nJSONEOF",
+      "sudo mv /tmp/config.json /opt/minecraft/panel/config.json",
+      "cd /opt/minecraft/panel && sudo docker compose up -d --build",
     ]
 
     connection {
@@ -249,7 +232,7 @@ resource "null_resource" "upload_key" {
       host        = oci_core_instance.mc_server.public_ip
       user        = "ubuntu"
       private_key = file(var.private_key_path)
-      timeout     = "5m"
+      timeout     = "10m"
     }
   }
 }

@@ -1,5 +1,6 @@
 # Private Keys
 *.pem
+*.pem.pub
 
 
 # Sensitive Variables

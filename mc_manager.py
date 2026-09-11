@@ -27,8 +27,6 @@ Requires: paramiko, requests (pip install -r requirements.txt)
 
 import json
 import os
-import socket
-import struct
 import sys
 import time
 import tempfile

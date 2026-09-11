@@ -31,8 +31,6 @@ Log in to the Oracle Cloud Console:
 3. Paste the information collected above into the matching sections of the file and save it.
 4. Copy `config.example.json` to `config.json` and edit it with your preferred Minecraft server settings (version, RAM, MOTD, etc.).
 
-> 
-
 ---
 
 ### 4. Deploy

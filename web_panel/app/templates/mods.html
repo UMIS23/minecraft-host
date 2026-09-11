@@ -1,26 +1,47 @@
 {% extends "base.html" %}
-{% block title %}Modlar - MC Panel{% endblock %}
+{% block title %}Mods - MC Panel{% endblock %}
 {% block content %}
-<h1>Mod Yönetimi</h1>
+<h1>Mod Management</h1>
 
 {% if result_msg %}
 <div class="alert alert-{{ result_type }}">{{ result_msg }}</div>
 {% endif %}
 
 <div class="card full-width">
-    <h3>Mod Yükle</h3>
-    <form method="post" action="/mods/install" class="form-row">
-        <input type="text" name="mod_name" placeholder="Mod adı (orn: jei, create...)" class="input" required>
-        <button type="submit" class="btn btn-green">Modrinth'ten Yükle</button>
+    <h3>Search Mods (Modrinth)</h3>
+    <form method="get" action="/mods" class="form-row">
+        <input type="text" name="q" value="{{ query }}" placeholder="Search mods (e.g. jei, create, sodium...)" class="input" required>
+        <button type="submit" class="btn btn-blue">Search</button>
     </form>
 </div>
 
+{% if search_results %}
 <div class="card full-width">
-    <h3>Yüklü Modlar ({{ mods|length }})</h3>
+    <h3>Search Results ({{ search_results|length }})</h3>
+    <div class="mod-results">
+        {% for mod in search_results %}
+        <div class="mod-result-item">
+            <div class="mod-info">
+                <div class="mod-title">{{ mod.title }}</div>
+                <div class="mod-desc">{{ mod.description }}</div>
+                <div class="mod-meta">{{ mod.downloads }} downloads</div>
+            </div>
+            <form method="post" action="/mods/install" style="display:inline">
+                <input type="hidden" name="mod_name" value="{{ mod.slug }}">
+                <button type="submit" class="btn btn-green btn-sm">Install</button>
+            </form>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<div class="card full-width">
+    <h3>Installed Mods ({{ mods|length }})</h3>
     {% if mods %}
     <table class="table">
         <thead>
-            <tr><th>Mod Adı</th><th>İşlem</th></tr>
+            <tr><th>Mod Name</th><th>Action</th></tr>
         </thead>
         <tbody>
             {% for mod in mods %}
@@ -29,7 +50,7 @@
                 <td>
                     <form method="post" action="/mods/remove" style="display:inline">
                         <input type="hidden" name="mod_name" value="{{ mod }}">
-                        <button type="submit" class="btn btn-red btn-sm">Kaldır</button>
+                        <button type="submit" class="btn btn-red btn-sm">Remove</button>
                     </form>
                 </td>
             </tr>
@@ -37,7 +58,7 @@
         </tbody>
     </table>
     {% else %}
-    <p style="color: #888; margin-top: 1rem;">Yüklü mod bulunmuyor.</p>
+    <p class="empty-state">No mods installed</p>
     {% endif %}
 </div>
 {% endblock %}

@@ -1,10 +1,13 @@
 import json
 import os
-import time
+import tempfile
 from pathlib import Path
+
+import requests
 
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from app.ssh_client import (
     load_config, save_config, ssh_connect, ssh_exec, docker_cmd,
@@ -15,6 +18,7 @@ from app.ssh_client import (
 app = FastAPI(title="MC Server Panel")
 
 BASE_DIR = Path(__file__).parent
+app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 
@@ -80,10 +84,11 @@ async def logs(request: Request, lines: int = 100):
 
 
 @app.get("/mods", response_class=HTMLResponse)
-async def mods_page(request: Request):
+async def mods_page(request: Request, q: str = ""):
     if not is_configured():
         return RedirectResponse("/settings", status_code=303)
     mod_list = []
+    search_results = []
     try:
         ssh = ssh_connect()
         _, stdout, _ = ssh_exec(ssh, "ls /opt/minecraft/data/mods/ 2>/dev/null")
@@ -92,7 +97,45 @@ async def mods_page(request: Request):
         ssh.close()
     except Exception:
         pass
-    return templates.TemplateResponse("mods.html", {"request": request, "mods": mod_list})
+
+    if q.strip():
+        try:
+            config = load_config()
+            version = config.get("minecraft_version", "")
+            loader = config.get("server_type", "vanilla")
+            loader_map = {
+                "forge": "forge", "fabric": "fabric", "paper": "paper",
+                "spigot": "spigot", "purpur": "purpur",
+            }
+            modrinth_loader = loader_map.get(loader)
+
+            params = {"query": q, "limit": 10, "index": "relevance"}
+            facets = [["project_type:mod"]]
+            if version:
+                facets.append([f"versions:{version}"])
+            if modrinth_loader:
+                facets.append([f"categories:{modrinth_loader}"])
+            params["facets"] = json.dumps(facets)
+
+            resp = requests.get("https://api.modrinth.com/v2/search", params=params, timeout=15)
+            resp.raise_for_status()
+            hits = resp.json().get("hits", [])
+            for h in hits:
+                search_results.append({
+                    "slug": h.get("slug", ""),
+                    "title": h.get("title", ""),
+                    "description": h.get("description", ""),
+                    "downloads": h.get("downloads", 0),
+                })
+        except Exception:
+            pass
+
+    return templates.TemplateResponse("mods.html", {
+        "request": request,
+        "mods": mod_list,
+        "search_results": search_results,
+        "query": q,
+    })
 
 
 @app.post("/mods/install")
@@ -110,7 +153,6 @@ async def mod_install(request: Request):
         result_type = "error"
     else:
         try:
-            import requests
             config = load_config()
             version = config["minecraft_version"]
             loader = config.get("server_type", "vanilla")
@@ -169,7 +211,6 @@ async def mod_install(request: Request):
                         ssh = ssh_connect()
                         ssh_exec(ssh, "sudo mkdir -p /opt/minecraft/data/mods && sudo chmod 777 /opt/minecraft/data/mods")
 
-                        import tempfile
                         r = requests.get(download_url, timeout=60, stream=True)
                         r.raise_for_status()
                         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".jar")
@@ -281,6 +322,7 @@ async def settings_save(request: Request):
     config["enable_rcon"] = form.get("enable_rcon") == "on"
     config["server_ip"] = form.get("server_ip", config.get("server_ip", ""))
     config["ssh_user"] = form.get("ssh_user", config.get("ssh_user", "ubuntu"))
+    config["server_port"] = config.get("server_port", 25565)
 
     save_config(config)
 

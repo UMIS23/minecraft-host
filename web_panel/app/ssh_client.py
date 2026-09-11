@@ -4,7 +4,7 @@ from pathlib import Path
 
 import paramiko
 
-CONFIG_FILE = Path(__file__).parent.parent.parent / "config.json"
+CONFIG_FILE = Path(__file__).parent.parent / "config.json"
 
 DEFAULT_CONFIG = {
     "minecraft_version": "1.20.1",
