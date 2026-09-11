@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Ayarlar - MC Panel{% endblock %}
+{% block content %}
+<h1>Sunucu Ayarları</h1>
+
+<div class="card full-width">
+    <form method="post" action="/settings">
+        <div class="form-grid">
+            <div class="form-group">
+                <label>Minecraft Versiyonu</label>
+                <input type="text" name="minecraft_version" value="{{ config.minecraft_version }}" class="input">
+            </div>
+            <div class="form-group">
+                <label>Sunucu Tipi</label>
+                <select name="server_type" class="select">
+                    {% for t in ["vanilla", "forge", "fabric", "paper", "spigot", "bukkit", "purpur", "quilt", "neoforge"] %}
+                    <option value="{{ t }}" {% if config.server_type == t %}selected{% endif %}>{{ t }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>RAM (GB)</label>
+                <input type="number" name="ram_gb" value="{{ config.ram_gb }}" class="input" min="1" max="32">
+            </div>
+            <div class="form-group">
+                <label>Maks Oyuncu</label>
+                <input type="number" name="max_players" value="{{ config.max_players }}" class="input" min="1">
+            </div>
+            <div class="form-group">
+                <label>View Distance</label>
+                <input type="number" name="view_distance" value="{{ config.view_distance }}" class="input" min="1" max="32">
+            </div>
+            <div class="form-group">
+                <label>MOTD / Sunucu Adı</label>
+                <input type="text" name="server_name" value="{{ config.server_name }}" class="input">
+            </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" name="online_mode" {% if config.online_mode %}checked{% endif %}>
+                    Online Mode
+                </label>
+            </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" name="enable_rcon" {% if config.enable_rcon %}checked{% endif %}>
+                    RCON Aktif
+                </label>
+            </div>
+        </div>
+        <button type="submit" class="btn btn-green" style="margin-top: 1rem;">Kaydet & Yeniden Başlat</button>
+    </form>
+</div>
+{% endblock %}

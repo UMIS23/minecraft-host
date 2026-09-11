@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Loglar - MC Panel{% endblock %}
+{% block content %}
+<h1>Sunucu Logları</h1>
+
+<div class="actions" style="margin-bottom: 1rem;">
+    <form method="get" action="/logs" style="display:inline; margin-right: 0.5rem;">
+        <select name="lines" class="select">
+            <option value="50" {% if lines == 50 %}selected{% endif %}>50 Satır</option>
+            <option value="100" {% if lines == 100 %}selected{% endif %}>100 Satır</option>
+            <option value="200" {% if lines == 200 %}selected{% endif %}>200 Satır</option>
+            <option value="500" {% if lines == 500 %}selected{% endif %}>500 Satır</option>
+        </select>
+        <button type="submit" class="btn btn-blue">Yenile</button>
+    </form>
+</div>
+
+<div class="log-box">
+    <pre>{{ logs }}</pre>
+</div>
+{% endblock %}

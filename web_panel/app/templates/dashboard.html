@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - MC Panel{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+
+<div class="status-grid">
+    <div class="card">
+        <h3>Sunucu Durumu</h3>
+        <span class="status-badge {% if status.container_status == 'running' %}online{% else %}offline{% endif %}">
+            {{ status.container_status }}
+        </span>
+    </div>
+    <div class="card">
+        <h3>IP</h3>
+        <p class="mono">{{ status.server_ip }}:{{ status.port }}</p>
+    </div>
+    <div class="card">
+        <h3>Versiyon</h3>
+        <p>{{ status.version }} ({{ status.server_type }})</p>
+    </div>
+    <div class="card">
+        <h3>RAM</h3>
+        <p>{{ status.ram_gb }} GB</p>
+    </div>
+    <div class="card">
+        <h3>Maks Oyuncu</h3>
+        <p>{{ status.max_players }}</p>
+    </div>
+    <div class="card">
+        <h3>MOTD</h3>
+        <p>{{ status.motd }}</p>
+    </div>
+</div>
+
+{% if status.resources %}
+<div class="card full-width">
+    <h3>Kaynak Kullanımı</h3>
+    <p class="mono">{{ status.resources }}</p>
+</div>
+{% endif %}
+
+{% if status.error %}
+<div class="card full-width error">
+    <h3>Hata</h3>
+    <p>{{ status.error }}</p>
+</div>
+{% endif %}
+
+<div class="actions">
+    <form method="post" action="/server/start" style="display:inline">
+        <button type="submit" class="btn btn-green">Start</button>
+    </form>
+    <form method="post" action="/server/stop" style="display:inline">
+        <button type="submit" class="btn btn-red">Stop</button>
+    </form>
+    <form method="post" action="/server/restart" style="display:inline">
+        <button type="submit" class="btn btn-yellow">Restart</button>
+    </form>
+</div>
+{% endblock %}

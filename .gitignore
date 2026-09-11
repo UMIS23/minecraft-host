@@ -20,9 +20,11 @@ config.json
 # Python Cache
 __pycache__/
 *.pyc
+.venv/
 
 # Temporary Files
 tmp*.jar
+*.mrpack
 
 # Backup Directory
 backup/

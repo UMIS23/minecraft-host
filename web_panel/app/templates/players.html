@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Oyuncular - MC Panel{% endblock %}
+{% block content %}
+<h1>Oyuncu Yönetimi</h1>
+
+<div class="grid-2">
+    <div class="card">
+        <h3>OP Listesi</h3>
+        <form method="post" action="/players/op" class="form-row">
+            <input type="text" name="player" placeholder="Oyuncu adı" class="input" required>
+            <button type="submit" class="btn btn-green btn-sm">OP Ver</button>
+        </form>
+        {% if ops %}
+        <ul class="player-list">
+            {% for op in ops %}
+            <li>
+                {{ op }}
+                <form method="post" action="/players/deop" style="display:inline">
+                    <input type="hidden" name="player" value="{{ op }}">
+                    <button type="submit" class="btn btn-red btn-xs">Kaldır</button>
+                </form>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p style="color: #888;">OP yok</p>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h3>Whitelist</h3>
+        <form method="post" action="/players/whitelist-add" class="form-row">
+            <input type="text" name="player" placeholder="Oyuncu adı" class="input" required>
+            <button type="submit" class="btn btn-blue btn-sm">Ekle</button>
+        </form>
+        {% if whitelist %}
+        <ul class="player-list">
+            {% for w in whitelist %}
+            <li>
+                {{ w }}
+                <form method="post" action="/players/whitelist-remove" style="display:inline">
+                    <input type="hidden" name="player" value="{{ w }}">
+                    <button type="submit" class="btn btn-red btn-xs">Kaldır</button>
+                </form>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p style="color: #888;">Whitelist boş</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card full-width" style="margin-top: 1.5rem;">
+    <h3>Ban Listesi</h3>
+    <form method="post" action="/players/ban" class="form-row">
+        <input type="text" name="player" placeholder="Oyuncu adı" class="input" required>
+        <input type="text" name="reason" placeholder="Sebep (isteğe bağlı)" class="input">
+        <button type="submit" class="btn btn-red btn-sm">Banla</button>
+    </form>
+    {% if bans %}
+    <ul class="player-list">
+        {% for b in bans %}
+        <li>
+            {{ b }}
+            <form method="post" action="/players/pardon" style="display:inline">
+                <input type="hidden" name="player" value="{{ b }}">
+                <button type="submit" class="btn btn-green btn-xs">Affet</button>
+            </form>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p style="color: #888;">Ban yok</p>
+    {% endif %}
+</div>
+{% endblock %}

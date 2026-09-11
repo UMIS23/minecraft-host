@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Modlar - MC Panel{% endblock %}
+{% block content %}
+<h1>Mod Yönetimi</h1>
+
+{% if result_msg %}
+<div class="alert alert-{{ result_type }}">{{ result_msg }}</div>
+{% endif %}
+
+<div class="card full-width">
+    <h3>Mod Yükle</h3>
+    <form method="post" action="/mods/install" class="form-row">
+        <input type="text" name="mod_name" placeholder="Mod adı (orn: jei, create...)" class="input" required>
+        <button type="submit" class="btn btn-green">Modrinth'ten Yükle</button>
+    </form>
+</div>
+
+<div class="card full-width">
+    <h3>Yüklü Modlar ({{ mods|length }})</h3>
+    {% if mods %}
+    <table class="table">
+        <thead>
+            <tr><th>Mod Adı</th><th>İşlem</th></tr>
+        </thead>
+        <tbody>
+            {% for mod in mods %}
+            <tr>
+                <td class="mono">{{ mod }}</td>
+                <td>
+                    <form method="post" action="/mods/remove" style="display:inline">
+                        <input type="hidden" name="mod_name" value="{{ mod }}">
+                        <button type="submit" class="btn btn-red btn-sm">Kaldır</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: #888; margin-top: 1rem;">Yüklü mod bulunmuyor.</p>
+    {% endif %}
+</div>
+{% endblock %}
