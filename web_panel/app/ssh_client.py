@@ -28,9 +28,9 @@ def ssh_connect():
     if not ip:
         raise Exception("Server IP not found in config.json.")
 
-    key_path = Path(os.path.expanduser(config.get("ssh_key_path", "~/.ssh/id_rsa")))
+    key_path = Path("/app/key1.pem")
     if not key_path.exists():
-        key_path = Path("/app/key1.pem")
+        key_path = Path(os.path.expanduser(config.get("ssh_key_path", "~/.ssh/id_rsa")))
     if not key_path.exists():
         key_path = Path("key1.pem")
 

@@ -154,7 +154,7 @@ resource "oci_core_instance" "mc_server" {
       DEBIAN_FRONTEND=noninteractive apt-get install -y netfilter-persistent iptables-persistent
       netfilter-persistent save
 
-      apt-get install -y docker.io
+      apt-get install -y docker.io git
       systemctl start docker
       systemctl enable docker
       usermod -aG docker ubuntu
@@ -182,33 +182,75 @@ resource "oci_core_instance" "mc_server" {
       sleep 5
       chmod -R 777 /opt/minecraft/data
 
-      apt-get install -y git
-
-      git clone https://github.com/UMIS23/minecraft-host.git /opt/minecraft/panel-repo
+      git clone --depth 1 --filter=blob:none --sparse https://github.com/UMIS23/minecraft-host.git /opt/minecraft/panel-repo
+      cd /opt/minecraft/panel-repo
+      git sparse-checkout set web_panel
 
       mkdir -p /opt/minecraft/panel
-      cp /opt/minecraft/panel-repo/web_panel/Dockerfile /opt/minecraft/panel/
-      cp /opt/minecraft/panel-repo/web_panel/docker-compose.yml /opt/minecraft/panel/
-      cp /opt/minecraft/panel-repo/web_panel/nginx.conf /opt/minecraft/panel/
-      cp /opt/minecraft/panel-repo/web_panel/requirements.txt /opt/minecraft/panel/
-      cp -r /opt/minecraft/panel-repo/web_panel/app /opt/minecraft/panel/
-      cp /opt/minecraft/panel-repo/config.json /opt/minecraft/panel/
-      cp /opt/minecraft/panel-repo/key1.pem /opt/minecraft/panel/
-
-      sed -i 's|/app/config.json|/opt/minecraft/panel/config.json|g' /opt/minecraft/panel/app/ssh_client.py
-      sed -i 's|/app/key1.pem|/opt/minecraft/panel/key1.pem|g' /opt/minecraft/panel/app/ssh_client.py
-
-      cd /opt/minecraft/panel && docker compose up -d --build
+      cp web_panel/Dockerfile /opt/minecraft/panel/
+      cp web_panel/docker-compose.yml /opt/minecraft/panel/
+      cp web_panel/nginx.conf /opt/minecraft/panel/
+      cp web_panel/requirements.txt /opt/minecraft/panel/
+      cp -r web_panel/app /opt/minecraft/panel/
+      chmod 600 /opt/minecraft/panel/app/ssh_client.py
+      rm -rf /opt/minecraft/panel-repo
 
       SERVER_IP=$(curl -s http://169.254.169.254/opc/v1/instance/metadata/public_ip)
-      cd /opt/minecraft/panel && python3 -c "
-import json
-with open('config.json') as f: c = json.load(f)
-c['server_ip'] = '$SERVER_IP'
-with open('config.json', 'w') as f: json.dump(c, f, indent=2)
-"
+
+      cat <<JSONEOF > /opt/minecraft/panel/config.json
+{
+  "minecraft_version": "${local.config.minecraft_version}",
+  "server_type": "${local.config.server_type}",
+  "ram_gb": ${local.config.ram_gb},
+  "server_port": ${local.config.server_port},
+  "max_players": ${local.config.max_players},
+  "online_mode": ${tostring(local.config.online_mode)},
+  "view_distance": ${local.config.view_distance},
+  "server_name": "${local.config.server_name}",
+  "enable_rcon": ${tostring(local.config.enable_rcon)},
+  "ssh_user": "ubuntu",
+  "ssh_key_path": "~/.ssh/id_rsa",
+  "server_ip": "$SERVER_IP"
+}
+JSONEOF
+
+      mkdir -p /opt/minecraft/panel/data
+      cd /opt/minecraft/panel && docker compose up -d --build
     EOF
     )
+  }
+}
+
+resource "null_resource" "upload_key" {
+  depends_on = [oci_core_instance.mc_server]
+
+  provisioner "file" {
+    source      = var.private_key_path
+    destination = "/opt/minecraft/panel/key1.pem"
+
+    connection {
+      type        = "ssh"
+      host        = oci_core_instance.mc_server.public_ip
+      user        = "ubuntu"
+      private_key = file(var.private_key_path)
+      timeout     = "5m"
+    }
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "sudo chmod 600 /opt/minecraft/panel/key1.pem",
+      "sudo chown root:root /opt/minecraft/panel/key1.pem",
+      "cd /opt/minecraft/panel && sudo docker compose restart panel"
+    ]
+
+    connection {
+      type        = "ssh"
+      host        = oci_core_instance.mc_server.public_ip
+      user        = "ubuntu"
+      private_key = file(var.private_key_path)
+      timeout     = "5m"
+    }
   }
 }
 

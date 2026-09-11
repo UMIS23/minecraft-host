@@ -4,6 +4,10 @@ terraform {
       source  = "oracle/oci"
       version = "8.28.0"
     }
+    null = {
+      source  = "hashicorp/null"
+      version = "~> 3.0"
+    }
   }
 }
 
