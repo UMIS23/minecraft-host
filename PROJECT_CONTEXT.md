@@ -23,7 +23,7 @@
 | Teknoloji | Amaç |
 |-----------|------|
 | **Oracle Cloud (OCI)** | Free Tier VM hosting (VM.Standard.A1.Flex - 4 OCPU, 24GB RAM) |
-| **Terraform** (v1.15.9) | Infrastructure as Code - OCI kaynak yönetimi |
+| **Terraform** | Infrastructure as Code - OCI kaynak yönetimi |
 | **Docker** | Minecraft sunucusu ve web panel container'ları |
 
 ### Backend
@@ -73,7 +73,7 @@ mc_sunucu_otomasyonu/
 ├── config.example.json        # Config şablonu
 ├── key1.pem                   # [HASSAS] SSH özel anahtarı
 │
-├── mc_manager.py              # CLI yönetim aracı (1600 satır)
+├── mc_manager.py              # CLI yönetim aracı (1599 satır)
 ├── requirements.txt           # CLI Python bağımlılıkları
 │
 ├── readme.md                  # Kurulum ve kullanım kılavuzu
@@ -84,11 +84,12 @@ mc_sunucu_otomasyonu/
     ├── docker-compose.yml     # panel + nginx servisleri
     ├── nginx.conf             # Nginx reverse proxy (port 80)
     ├── requirements.txt       # Panel Python bağımlılıkları
+    ├── config.json            # Sunucu yapılandırması (deploy sırasında oluşur)
     ├── .dockerignore          # Docker build ignored
     │
     └── app/
         ├── __init__.py        # Boş paket init
-        ├── main.py            # FastAPI endpoint'leri (484 satır)
+        ├── main.py            # FastAPI endpoint'leri (730 satır)
         ├── ssh_client.py      # SSH yardımcı fonksiyonlar (168 satır)
         │
         ├── templates/
@@ -101,7 +102,7 @@ mc_sunucu_otomasyonu/
         │
         └── static/
             └── css/
-                └── style.css  # Dark tema CSS (576 satır)
+                └── style.css  # Dark tema CSS (645 satır)
 ```
 
 ---
@@ -297,22 +298,25 @@ Terraform (.tf dosyaları)
 ### 7.6. Desteklenen Sunucu Türleri
 
 ```
-vanilla, forge, fabric, paper, spigot, bukkit, purpur, sponge, velocity, quilt, neoforge, bedrock
+vanilla, forge, fabric, paper, spigot, bukkit, purpur, sponge, velocity, quilt, neoforge, fml, limbo, bedrock
 ```
 
 ### 7.7. Client-Side Mod Filtresi
 
 Sunucuda çalışmayan ve karantinaya alınan modlar:
 ```
-Iris, Sodium, OptiFine, OptiForge, Rubidium, Oculus, Embeddium,
-Lithium, Phosphor, Starlight, FerriteCore, MemoryFix,
-BetterFps, FPS Reducer, CrabLib, ColossalChests,
-Inventory Profiles Next, JourneyMap, Xaero's Minimap,
-Jade, WAILA, HWYLA, The One Probe, TOP,
-Shaders Mod, SEUS, Sildurs, BSL, Complementary,
-Presence Footsteps, Sound Physics, AmbientSounds,
-Voice Chat, Simple Voice Chat, Talk Bubbles,
-AppleSkin, Jade, WTHIT, Polymorph, ...
+iris, irisfixes, oculus, embeddium, rubidium, optifine, optifog,
+sodium, sodium-extra, sodiumextras, sodiumdynamiclights,
+sodiumoptionsapi, sodiumoptionsmodcompat, reeses_sodium_options,
+entity_texture_features, entity_model_features, skinlayers3d,
+dynamiclights, lambdynamiclights, betterclouds, smartlighting,
+continuity, immediatelyfast, lithium, ferritecore, lazydfu, starlight,
+cavedust, voidfog, modmenu, zoomify, minihud, tweakeroo,
+xaerominimap, xaeroworldmap, journeymap, inventoryhud, craftpresence,
+keybindings, nemos_inventory_sorting, nemos-inventory-sorting,
+presencefootsteps, sound-physics-remastered, notenoughanimations,
+player-animation-lib, better-third-person, leawind_third_person,
+flerovium, colorwheel, colorwheel_patcher, geckolib-fabric
 ```
 
 ---
