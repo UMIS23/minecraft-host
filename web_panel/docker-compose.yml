@@ -6,6 +6,7 @@ services:
     volumes:
       - ./config.json:/app/config.json
       - ./key1.pem:/app/key1.pem:ro
+      - ..:/tf
     expose:
       - "8000"
     networks:

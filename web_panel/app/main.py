@@ -1,5 +1,6 @@
 import json
 import os
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -14,6 +15,10 @@ from app.ssh_client import (
     get_server_status, get_java_tag, build_docker_run, get_server_ip,
     is_configured, CONFIG_FILE,
 )
+
+TERRAFORM_DIR = Path("/tf/terraform")
+TERRAFORM_LOG = Path("/tf/terraform/terraform.log")
+TFVARS_FILE = TERRAFORM_DIR / "terraform.tfvars"
 
 MODRINTH_API = "https://api.modrinth.com/v2"
 
@@ -41,6 +46,64 @@ app = FastAPI(title="MC Server Panel")
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+
+
+def load_oci_credentials():
+    oci = {}
+    if TFVARS_FILE.exists():
+        with open(TFVARS_FILE) as f:
+            for line in f:
+                line = line.strip()
+                if "=" in line and not line.startswith("#"):
+                    key, _, val = line.partition("=")
+                    oci[key.strip()] = val.strip().strip('"').strip("'")
+    return oci
+
+
+def save_oci_credentials(oci):
+    lines = []
+    for key in ["tenancy_ocid", "user_ocid", "compartment_ocid", "fingerprint", "private_key_path", "region_key"]:
+        val = oci.get(key, "")
+        lines.append(f'{key} = "{val}"')
+    with open(TFVARS_FILE, "w") as f:
+        f.write("\n".join(lines) + "\n")
+
+
+def run_terraform(args, timeout=300):
+    cmd = ["terraform"] + args
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=str(TERRAFORM_DIR),
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+        output = result.stdout + "\n" + result.stderr
+        with open(TERRAFORM_LOG, "a") as f:
+            f.write(f"\n--- {' '.join(cmd)} ---\n")
+            f.write(output)
+        return output.strip()
+    except subprocess.TimeoutExpired:
+        msg = f"Timeout after {timeout}s"
+        with open(TERRAFORM_LOG, "a") as f:
+            f.write(f"\n--- TIMEOUT: {' '.join(cmd)} ---\n{msg}\n")
+        return msg
+    except FileNotFoundError:
+        return "terraform binary not found"
+    except Exception as e:
+        return f"Error: {e}"
+
+
+def get_terraform_logs(lines=100):
+    if not TERRAFORM_LOG.exists():
+        return "No terraform logs yet."
+    try:
+        with open(TERRAFORM_LOG) as f:
+            all_lines = f.readlines()
+        return "".join(all_lines[-lines:])
+    except Exception as e:
+        return f"Error reading logs: {e}"
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -91,17 +154,20 @@ async def server_restart():
 
 
 @app.get("/logs", response_class=HTMLResponse)
-async def logs(request: Request, lines: int = 100):
-    if not is_configured():
-        return RedirectResponse("/settings", status_code=303)
+async def logs(request: Request, source: str = "mc", lines: int = 100):
     log_output = ""
-    try:
-        ssh = ssh_connect()
-        _, log_output, _ = ssh_exec(ssh, f"docker logs mc --tail {lines} 2>&1", timeout=15)
-        ssh.close()
-    except Exception as e:
-        log_output = f"Error: {e}"
-    return templates.TemplateResponse("logs.html", {"request": request, "logs": log_output, "lines": lines})
+    if source == "terraform":
+        log_output = get_terraform_logs(lines)
+    else:
+        if not is_configured():
+            return RedirectResponse("/settings", status_code=303)
+        try:
+            ssh = ssh_connect()
+            _, log_output, _ = ssh_exec(ssh, f"docker logs mc --tail {lines} 2>&1", timeout=15)
+            ssh.close()
+        except Exception as e:
+            log_output = f"Error: {e}"
+    return templates.TemplateResponse("logs.html", {"request": request, "logs": log_output, "lines": lines, "source": source})
 
 
 @app.get("/mods", response_class=HTMLResponse)
@@ -592,6 +658,110 @@ async def settings_save(request: Request):
         pass
 
     return RedirectResponse("/settings", status_code=303)
+
+
+@app.get("/oracle", response_class=HTMLResponse)
+async def oracle_page(request: Request):
+    oci = load_oci_credentials()
+    oci_configured = bool(oci.get("tenancy_ocid"))
+    tf_state = "No state available."
+    if oci_configured:
+        tf_state = run_terraform(["show", "-json"], timeout=30)
+        try:
+            state_data = json.loads(tf_state)
+            resources = state_data.get("values", {}).get("root_module", {}).get("resources", [])
+            if resources:
+                lines = []
+                for r in resources:
+                    rtype = r.get("type", "unknown")
+                    name = r.get("name", "unknown")
+                    values = r.get("values", {})
+                    ip = values.get("public_ip") or values.get("private_ip") or ""
+                    lines.append(f"{rtype}.{name}: {ip or 'created'}")
+                tf_state = "\n".join(lines)
+            else:
+                tf_state = "No resources deployed."
+        except (json.JSONDecodeError, KeyError):
+            tf_state = "Could not parse state."
+    return templates.TemplateResponse("oracle.html", {
+        "request": request, "oci": oci, "oci_configured": oci_configured, "tf_state": tf_state, "result_msg": None, "result_type": None,
+    })
+
+
+@app.post("/oracle")
+async def oracle_save(request: Request):
+    form = await request.form()
+    oci = {
+        "tenancy_ocid": form.get("tenancy_ocid", ""),
+        "user_ocid": form.get("user_ocid", ""),
+        "compartment_ocid": form.get("compartment_ocid", ""),
+        "fingerprint": form.get("fingerprint", ""),
+        "private_key_path": form.get("private_key_path", "key1.pem"),
+        "region_key": form.get("region_key", ""),
+    }
+    save_oci_credentials(oci)
+
+    oci_configured = bool(oci.get("tenancy_ocid"))
+    tf_state = "No state available."
+    if oci_configured:
+        tf_state = run_terraform(["init", "-input=false"], timeout=120)
+        tf_state += "\n\n" + run_terraform(["show", "-json"], timeout=30)
+
+    return templates.TemplateResponse("oracle.html", {
+        "request": request, "oci": oci, "oci_configured": oci_configured, "tf_state": tf_state,
+        "result_msg": "Credentials saved.", "result_type": "success",
+    })
+
+
+@app.post("/oracle/deploy")
+async def oracle_deploy(request: Request):
+    oci = load_oci_credentials()
+    if not oci.get("tenancy_ocid"):
+        return RedirectResponse("/oracle", status_code=303)
+
+    run_terraform(["init", "-input=false"], timeout=120)
+    output = run_terraform(["apply", "-auto-approve", "-input=false"], timeout=600)
+
+    oci_configured = bool(oci.get("tenancy_ocid"))
+    tf_state = run_terraform(["show", "-json"], timeout=30)
+    try:
+        state_data = json.loads(tf_state)
+        resources = state_data.get("values", {}).get("root_module", {}).get("resources", [])
+        if resources:
+            lines = []
+            for r in resources:
+                rtype = r.get("type", "unknown")
+                name = r.get("name", "unknown")
+                values = r.get("values", {})
+                ip = values.get("public_ip") or values.get("private_ip") or ""
+                lines.append(f"{rtype}.{name}: {ip or 'created'}")
+            tf_state = "\n".join(lines)
+        else:
+            tf_state = "No resources deployed."
+    except (json.JSONDecodeError, KeyError):
+        pass
+
+    return templates.TemplateResponse("oracle.html", {
+        "request": request, "oci": oci, "oci_configured": oci_configured, "tf_state": tf_state,
+        "result_msg": f"Deploy complete. Check logs for details.", "result_type": "success",
+    })
+
+
+@app.post("/oracle/destroy")
+async def oracle_destroy(request: Request):
+    oci = load_oci_credentials()
+    if not oci.get("tenancy_ocid"):
+        return RedirectResponse("/oracle", status_code=303)
+
+    output = run_terraform(["destroy", "-auto-approve", "-input=false"], timeout=600)
+
+    oci_configured = bool(oci.get("tenancy_ocid"))
+    tf_state = "No resources deployed."
+
+    return templates.TemplateResponse("oracle.html", {
+        "request": request, "oci": oci, "oci_configured": False, "tf_state": tf_state,
+        "result_msg": "Destroy complete.", "result_type": "success",
+    })
 
 
 @app.get("/players", response_class=HTMLResponse)

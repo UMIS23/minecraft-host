@@ -1,175 +1,108 @@
 # MC Server Automation
 
-Deploy a Minecraft server on Oracle Cloud Free Tier with a single command and manage it through a web panel.
+Deploy a Minecraft server on Oracle Cloud Free Tier and manage it through a web panel.
 
 ---
 
 ## Prerequisites
 
-Before you begin, make sure you have the following installed:
-
-- **Python 3.10+** -- [Download Python](https://www.python.org/downloads/)
-- **Terraform** -- [Install Terraform](https://developer.hashicorp.com/terraform/install)
-- **SSH client** -- Built-in on Linux/macOS, [install for Windows](https://docs.microsoft.com/windows/terminal/tutorials/ssh-tutorial)
-
-Verify your installations:
-
-```bash
-python3 --version
-terraform --version
-ssh -V
-```
+- **Oracle Cloud account** — [Sign up](https://cloud.oracle.com) (Free Tier eligible)
 
 ---
 
-## Setup
+## Step 1: Create Oracle Cloud API Key
 
-### 1. Gather Oracle Cloud Credentials
+1. Log in to [Oracle Cloud Console](https://cloud.oracle.com)
+2. Click your **profile icon** (top right) → **Tokens and Keys**
+3. Left menu → **API Keys** → **Add API Key**
+4. Select **Generate API Key Pair**
+5. Download the **Private Key** (`.pem` file) → save it to this project folder
+6. Click **Add** → copy the **Fingerprint** shown
+7. Set key permissions: `chmod 400 key1.pem`
 
-Log in to [Oracle Cloud Console](https://cloud.oracle.com) and copy the following:
+---
 
-- **Tenancy OCID:** Profile (top right) -> Tenancy -> Copy OCID
-- **User OCID:** Profile -> Copy OCID
-- **Compartment OCID:** Menu (top left) -> Identity & Security -> Compartments -> select your compartment -> Copy OCID
-- **Region Key:** Developer Tools (left of profile) -> Cloud shell -> shown at the top
+## Step 2: Create SSH Key
 
-### 2. Create Oracle API Key
-
-1. Profile -> Tokens and Keys -> API Keys (left menu)
-2. Click **Add API Key** -> Select **Generate API Key Pair**
-3. Download the **Private Key** (`.pem` file) and place it in the project folder
-4. Click **Add** and copy the generated **Fingerprint**
-5. Set key permissions: `chmod 400 your_key.pem`
-
-### 3. Create SSH Key and Upload to Oracle
-
-You need an SSH key to connect to the server. Run in terminal:
+Run in terminal:
 
 ```bash
-ssh-keygen -t ed25519 -f my_key -N ""
+ssh-keygen -t ed25519 -f key1 -N ""
 ```
-
-This creates two files: `my_key` (private) and `my_key.pub` (public).
 
 Upload the public key to Oracle:
-1. Profile -> My Profile -> SSH Keys (left menu)
-2. Click **Add Public Key**
-3. Open `my_key.pub`, copy its contents and paste
-4. Click **Add**
 
-### 4. Configure Files
-
-Copy the example files in the project folder:
-
-```bash
-cp terraform.tfvars.example terraform.tfvars
-cp config.example.json config.json
-```
-
-Edit **terraform.tfvars** with your Oracle credentials:
-
-```
-tenancy_ocid     = "ocid1.tenancy.oc1..your_value_here"
-user_ocid        = "ocid1.user.oc1..your_value_here"
-compartment_ocid = "ocid1.tenancy.oc1..your_value_here"
-fingerprint      = "xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx"
-private_key_path = "your_key.pem"
-region_key       = "il-jerusalem-1"
-```
-
-Edit **config.json** with your Minecraft server settings:
-
-```json
-{
-  "minecraft_version": "1.21.1",
-  "server_type": "vanilla",
-  "ram_gb": 16,
-  "server_port": 25565,
-  "max_players": 20,
-  "online_mode": false,
-  "view_distance": 20,
-  "server_name": "A Cool Server",
-  "enable_rcon": true,
-  "ssh_user": "ubuntu",
-  "ssh_key_path": "~/.ssh/id_rsa",
-  "server_ip": ""
-}
-```
-
-> **Note:** The `server_ip` field will be filled automatically by Terraform after deployment. You do not need to set it manually.
-
-### 5. Deploy
-
-Run in the project folder:
-
-```bash
-terraform init
-terraform plan
-terraform apply
-```
-
-Type `yes` and wait. It takes 5-10 minutes. When done, an SSH IP will appear in the terminal output. Copy it.
+1. Profile icon → **My Profile** → Left menu → **SSH Keys**
+2. **Add Public Key** → paste contents of `key1.pub`
+3. Click **Add**
 
 ---
 
-## Connecting
+## Step 3: Gather Your OCIDs
 
-### SSH to Server
-
-Open a new terminal:
-
-```bash
-ssh -i my_key ubuntu@<THE_IP_FROM_OUTPUT>
-```
-
-### Access Web Panel
-
-The panel runs on the server but is not publicly accessible. Open an SSH tunnel:
-
-Open a new terminal:
-
-```bash
-ssh -i my_key -L 8080:localhost:80 ubuntu@<THE_IP_FROM_OUTPUT>
-```
-
-Keep this terminal open. Now open in your browser:
-
-```
-http://localhost:8080
-```
-
-The panel is ready. Manage everything from here.
+| Value | Where to find |
+|-------|---------------|
+| **Tenancy OCID** | Profile icon → **Tenancy** → Copy OCID |
+| **User OCID** | Profile icon → Copy OCID |
+| **Compartment OCID** | Menu (top left) → **Identity & Security** → **Compartments** → select your compartment → Copy OCID |
+| **Fingerprint** | Profile → Tokens and Keys → API Keys → copy fingerprint |
+| **Region** | Look at the top of the page or open Cloud Shell → shown at the top |
 
 ---
 
-## Web Panel
+## Step 4: First Boot
+
+1. Start an SSH tunnel:
+
+```bash
+ssh -i key1.pem -L 8080:127.0.0.1:80 ubuntu@<SERVER_IP>
+```
+
+> If you haven't deployed yet, you won't have a SERVER_IP. That's okay — you can deploy from the web panel directly.
+
+2. Open in browser: `http://localhost:8080`
+
+3. Go to **Oracle Cloud** page (sidebar)
+
+4. Fill in the 6 fields with values from Step 3:
+
+| Field | Paste your |
+|-------|-----------|
+| Tenancy OCID | `ocid1.tenancy.oc1..aaaa...` |
+| User OCID | `ocid1.user.oc1..aaaa...` |
+| Compartment OCID | `ocid1.tenancy.oc1..aaaa...` |
+| Fingerprint | `xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx` |
+| Private Key Path | `key1.pem` |
+| Region | `il-jerusalem-1` |
+
+5. Click **Save Credentials**
+
+6. Click **Deploy** — wait 5-8 minutes
+
+7. After deploy, go to **Settings** → the server IP will now show the public IP of your VM. Copy it into the **Server IP** field → Save.
+
+---
+
+## Web Panel Overview
 
 ### Dashboard
-- Server status (Running / Stopped)
-- IP, version, server type
-- RAM and CPU usage
-- Start / Stop / Restart buttons
+Server status, IP, version, RAM/CPU usage. Start / Stop / Restart buttons.
 
 ### Logs
-View server logs. Choose between 50-500 lines.
+- **Minecraft** tab — server console logs
+- **Terraform** tab — deploy/infrastructure logs
 
 ### Mods
-- Search and install mods from Modrinth
-- View and remove installed mods
-
-### Modpacks
-- Search and install modpacks from Modrinth
-- View and uninstall installed modpack with one click
+Search and install mods from Modrinth. View and remove installed mods.
 
 ### Players
-- OP management
-- Whitelist management
-- Ban list management
+OP management, Whitelist, Ban list.
 
 ### Settings
-- Minecraft version and server type
-- RAM, max players, view distance
-- MOTD, online mode, RCON
+Minecraft version, server type, RAM, players, MOTD, etc.
+
+### Oracle Cloud
+OCI credentials, Deploy/Destroy buttons, current infrastructure state.
 
 ---
 
