@@ -17,40 +17,56 @@ Deploy a Minecraft server on Oracle Cloud Free Tier and manage it through a web 
 3. Left menu → **API Keys** → **Add API Key**
 4. Select **Generate API Key Pair**
 5. Download the **Private Key** (`.pem` file) → save it to this project folder
-6. Click **Add** → copy the **Fingerprint** shown
+6. Click **Add** → the console shows all OCI info (Tenancy OCID, User OCID, Compartment OCID, Fingerprint, Region). Copy them somewhere safe.
 7. Set key permissions: `chmod 400 key1.pem`
 
 ---
 
 ## Step 2: Create SSH Key
 
-Run in terminal:
-
 ```bash
 ssh-keygen -t ed25519 -f key1 -N ""
 ```
 
-Upload the public key to Oracle:
-
-1. Profile icon → **My Profile** → Left menu → **SSH Keys**
-2. **Add Public Key** → paste contents of `key1.pub`
-3. Click **Add**
+> Terraform automatically adds this key to your VM during deployment.
 
 ---
 
-## Step 3: Gather Your OCIDs
+## Step 3: Configure Terraform
 
-| Value | Where to find |
-|-------|---------------|
-| **Tenancy OCID** | Profile icon → **Tenancy** → Copy OCID |
-| **User OCID** | Profile icon → Copy OCID |
-| **Compartment OCID** | Menu (top left) → **Identity & Security** → **Compartments** → select your compartment → Copy OCID |
-| **Fingerprint** | Profile → Tokens and Keys → API Keys → copy fingerprint |
-| **Region** | Look at the top of the page or open Cloud Shell → shown at the top |
+1. Copy the example file and rename it:
+
+```bash
+cp terraform.tfvars.example terraform.tfvars
+```
+
+2. Open `terraform.tfvars` and fill in your values from Step 1:
+
+```hcl
+tenancy_ocid     = "ocid1.tenancy.oc1..aaaa..."
+user_ocid        = "ocid1.user.oc1..aaaa..."
+compartment_ocid = "ocid1.tenancy.oc1..aaaa..."
+fingerprint      = "xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx"
+private_key_path = "key1.pem"
+region_key       = "il-jerusalem-1"
+```
+
+3. Install Terraform if not already installed: https://developer.hashicorp.com/terraform/install
 
 ---
 
-## Step 4: First Boot
+## Step 4: Deploy
+
+```bash
+terraform init
+terraform apply
+```
+
+Wait 5-8 minutes for deployment to complete. The output will show your server's public IP.
+
+---
+
+## Step 5: Access Web Panel
 
 1. Start an SSH tunnel:
 
@@ -58,28 +74,9 @@ Upload the public key to Oracle:
 ssh -i key1.pem -L 8080:127.0.0.1:80 ubuntu@<SERVER_IP>
 ```
 
-> If you haven't deployed yet, you won't have a SERVER_IP. That's okay — you can deploy from the web panel directly.
-
 2. Open in browser: `http://localhost:8080`
 
-3. Go to **Oracle Cloud** page (sidebar)
-
-4. Fill in the 6 fields with values from Step 3:
-
-| Field | Paste your |
-|-------|-----------|
-| Tenancy OCID | `ocid1.tenancy.oc1..aaaa...` |
-| User OCID | `ocid1.user.oc1..aaaa...` |
-| Compartment OCID | `ocid1.tenancy.oc1..aaaa...` |
-| Fingerprint | `xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx` |
-| Private Key Path | `key1.pem` |
-| Region | `il-jerusalem-1` |
-
-5. Click **Save Credentials**
-
-6. Click **Deploy** — wait 5-8 minutes
-
-7. After deploy, go to **Settings** → the server IP will now show the public IP of your VM. Copy it into the **Server IP** field → Save.
+3. Go to **Settings** → paste your server's public IP into **Server IP** field → Save.
 
 ---
 
