@@ -9,7 +9,7 @@
   "server_name": "A Cool Server",
   "enable_rcon": true,
   "ssh_user": "ubuntu",
-  "ssh_key_path": "key1",
+  "ssh_key_path": "my-ssh-key",
   "server_ip": "",
   "nlb_ip": ""
 }
