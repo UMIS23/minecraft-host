@@ -37,3 +37,8 @@ resource "oci_network_load_balancer_listener" "mc_listener" {
   port                     = local.config.server_port
   protocol                 = "TCP_AND_UDP"
 }
+
+output "mc_ip" {
+  value       = [for ip in oci_network_load_balancer_network_load_balancer.mc_nlb.ip_addresses : ip.ip_address if ip.is_public][0]
+  description = "Public NLB IP for Minecraft players"
+}

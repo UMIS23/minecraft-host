@@ -95,7 +95,12 @@ terraform init
 terraform apply
 ```
 
-Wait 5-8 minutes for deployment to complete. The output will show your server's public IP.
+Wait 5-8 minutes for deployment to complete. The outputs show two IPs:
+
+```bash
+terraform output -raw ssh_ip   # management/SSH (yours only)
+terraform output -raw mc_ip    # player address (give this to players)
+```
 
 ---
 

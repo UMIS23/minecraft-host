@@ -242,7 +242,7 @@ resource "null_resource" "setup_panel" {
       "sudo chown -R ubuntu:ubuntu /opt/minecraft/panel",
       "sudo chmod 600 /opt/minecraft/panel/key1",
       "sudo chmod 600 /opt/minecraft/panel/app/ssh_client.py",
-      "cat > /tmp/config.json << 'JSONEOF'\n{\"minecraft_version\":\"${local.config.minecraft_version}\",\"server_type\":\"${local.config.server_type}\",\"ram_gb\":${local.config.ram_gb},\"server_port\":${local.config.server_port},\"max_players\":${local.config.max_players},\"online_mode\":${tostring(local.config.online_mode)},\"view_distance\":${local.config.view_distance},\"server_name\":\"${local.config.server_name}\",\"enable_rcon\":${tostring(local.config.enable_rcon)},\"ssh_user\":\"ubuntu\",\"ssh_key_path\":\"/app/key1\",\"server_ip\":\"${oci_core_instance.mc_server.public_ip}\"}\nJSONEOF",
+      "cat > /tmp/config.json << 'JSONEOF'\n{\"minecraft_version\":\"${local.config.minecraft_version}\",\"server_type\":\"${local.config.server_type}\",\"ram_gb\":${local.config.ram_gb},\"server_port\":${local.config.server_port},\"max_players\":${local.config.max_players},\"online_mode\":${tostring(local.config.online_mode)},\"view_distance\":${local.config.view_distance},\"server_name\":\"${local.config.server_name}\",\"enable_rcon\":${tostring(local.config.enable_rcon)},\"ssh_user\":\"ubuntu\",\"ssh_key_path\":\"/app/key1\",\"server_ip\":\"${oci_core_instance.mc_server.public_ip}\",\"nlb_ip\":\"${[for ip in oci_network_load_balancer_network_load_balancer.mc_nlb.ip_addresses : ip.ip_address if ip.is_public][0]}\"}\nJSONEOF",
       "sudo mv /tmp/config.json /opt/minecraft/panel/config.json",
       "cd /opt/minecraft/panel && sudo docker compose up -d --build",
     ]

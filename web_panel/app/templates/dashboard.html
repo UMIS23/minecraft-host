@@ -11,7 +11,11 @@
         </span>
     </div>
     <div class="card">
-        <h3>IP Address</h3>
+        <h3>Players Connect</h3>
+        <p class="mono">{{ status.nlb_ip or status.server_ip }}:{{ status.port }}</p>
+    </div>
+    <div class="card">
+        <h3>Management IP</h3>
         <p class="mono">{{ status.server_ip }}:{{ status.port }}</p>
     </div>
     <div class="card">

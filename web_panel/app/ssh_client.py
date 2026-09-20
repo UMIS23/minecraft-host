@@ -19,6 +19,7 @@ DEFAULT_CONFIG = {
     "ssh_user": "ubuntu",
     "ssh_key_path": "key1",
     "server_ip": "",
+    "nlb_ip": "",
 }
 
 
@@ -135,6 +136,7 @@ def get_server_status():
     config = load_config()
     result = {
         "server_ip": get_server_ip(),
+        "nlb_ip": config.get("nlb_ip", ""),
         "port": config.get("server_port", 25565),
         "version": config.get("minecraft_version", "1.20.1"),
         "server_type": config.get("server_type", "vanilla"),

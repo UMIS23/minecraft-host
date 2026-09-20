@@ -112,6 +112,20 @@ def get_server_ip():
     return None
 
 
+def get_nlb_ip():
+    """Get public NLB IP (player address) from Terraform output."""
+    try:
+        result = os.popen(
+            f"cd {TERRAFORM_DIR} && terraform output -raw mc_ip 2>/dev/null"
+        ).read().strip()
+        if result:
+            return result
+    except Exception:
+        pass
+
+    return None
+
+
 def ssh_connect():
     """Establish SSH connection to the Minecraft server."""
     config = load_config()
@@ -199,6 +213,7 @@ def cmd_status():
     print(f"  Minecraft Server Status")
     print(f"{'='*60}")
     print(f"  Server IP:     {ip or 'N/A'}")
+    print(f"  Players:       {(get_nlb_ip() or ip) or 'N/A'}")
     print(f"  Port:          {config['server_port']}")
     print(f"  Version:       {config['minecraft_version']}")
     print(f"  Server Type:   {config.get('server_type', 'vanilla')}")
