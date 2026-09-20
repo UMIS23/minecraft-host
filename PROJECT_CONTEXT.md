@@ -1,6 +1,6 @@
 # PROJECT_CONTEXT.md
 
-> Bu döküman, her yeni otomasyon otosyonu açıldığında projeyi hızlıca anlayıp çalışmaya başlamak için hazırlanmıştır.
+> Bu döküman, her yeni oturum açıldığında projeyi hızlıca anlayıp çalışmaya başlamak için hazırlanmıştır.
 
 ---
 
@@ -71,9 +71,11 @@ mc_sunucu_otomasyonu/
 │
 ├── config.json                # [HASSAS] Sunucu yapılandırması (MC sürümü, RAM, port vb.)
 ├── config.example.json        # Config şablonu
-├── key1.pem                   # [HASSAS] SSH özel anahtarı
+├── key1.pem                   # [HASSAS] OCI API özel anahtarı (isim kullanıcı seçer)
+├── key1                       # [HASSAS] SSH özel anahtarı (isim kullanıcı seçer)
+├── key1.pub                   # SSH public anahtarı (VM'e gömülür)
 │
-├── mc_manager.py              # CLI yönetim aracı (1599 satır)
+├── mc_manager.py              # CLI yönetim aracı (1614 satır)
 ├── requirements.txt           # CLI Python bağımlılıkları
 │
 ├── readme.md                  # Kurulum ve kullanım kılavuzu
@@ -89,8 +91,8 @@ mc_sunucu_otomasyonu/
     │
     └── app/
         ├── __init__.py        # Boş paket init
-        ├── main.py            # FastAPI endpoint'leri (730 satır)
-        ├── ssh_client.py      # SSH yardımcı fonksiyonlar (168 satır)
+        ├── main.py            # FastAPI endpoint'leri (746 satır)
+        ├── ssh_client.py      # SSH yardımcı fonksiyonlar (175 satır)
         │
         ├── templates/
         │   ├── base.html      # Temel layout (sidebar + content)
@@ -164,10 +166,10 @@ web_panel/app/ssh_client.py (Altyapı)
 
 Terraform (.tf dosyaları)
 ├── config.json (locals.config)
-├── variables.tf (OCI credentials)
+├── variables.tf (OCI credentials + key yolları: private_key_path, ssh_private_key_path, ssh_public_key_path)
 ├── terraform.tfvars (değerler)
-├── key1.pem.pub (SSH public key)
-└── web_panel/ (docker compose ile deploy)
+├── key1.pub (SSH public key → VM authorized_keys)
+└── web_panel/ (tarball ile sunucuya yüklenir, docker compose ile deploy)
 ```
 
 ### 4.3. Veri Akışı Örnekleri
@@ -209,23 +211,28 @@ Terraform (.tf dosyaları)
 | Modrinth Entegrasyonu | ✅ Tamamlandı | Mod/modpack arama, indirme, yükleme |
 | Mod Karantina Sistemi | ✅ Tamamlandı | Client-side mod filtreleme, crash detection |
 | Harita Yükleme | ✅ Tamamlandı | .zip/.mcworld desteği, resource pack |
+| Key Ayrımı (API vs SSH) | ✅ Tamamlandı | `key1.pem` (OCI API) + `key1`/`key1.pub` (SSH); adlar değişkenle seçiliyor |
+| Oyuncu IP'si (`mc_ip`) | ✅ Tamamlandı | NLB public IP output + dashboard/CLI'de ayrı gösterim |
+| Panel Deploy Fix | ✅ Tamamlandı | Tarball upload + mkdir sıralaması (scp race çözüldü) |
 
 ### 🔧 Mevcut Durum
 
 - Proje **çalışır durumda**
 - Oracle Cloud Free Tier VM üzerinde deploy edilmiş
+- İki ayrı IP: yönetim/SSH (`ssh_ip` output) + oyuncular (`mc_ip` output, NLB)
 - Hem CLI hem Web Panel üzerinden yönetim mümkün
 - Modrinth API entegrasyonu aktif
+- Web panelde Oracle Cloud bölümü **kaldırıldı** (kullanıcı isteği; deploy Terraform CLI ile yapılıyor)
 
 ---
 
 ## 6. Gelecek Adımlar ve Yol Haritası
 
 ### Genel Vizyon
-Tüm yönetim işlemleri web paneli üzerinden yapılacak. Kullanıcı sadece terminalden web paneline bağlanma (SSH tunnel) işlemini yapacak. Oracle Cloud credentials (tenancy_ocid, user_ocid, compartment_ocid, fingerprint, private_key_path, region_key) web paneli arayüzünden girilip Terraform buradan çalıştırılacak.
+Tüm yönetim işlemleri web paneli ve CLI üzerinden yapılacak. Deploy Terraform CLI ile yapılıyor (web paneldeki Oracle Cloud bölümü güvenlik/sadelik için kaldırıldı). Oyuncu trafiği NLB üzerinden, yönetim (SSH/panel/CLI) doğrudan VM IP'si üzerinden yürüyor.
 
 ### Yakın Vadeli (Sıradaki Adım)
-- [ ] **Oracle ID Web Panel Entegrasyonu** — Web paneline Oracle Cloud credential formu eklenmesi. Kullanıcı OCI tenancy_ocid, user_ocid, compartment_ocid, fingerprint, private_key_path, region_key değerlerini web panelinden girecek. Web panel bu değerleri `terraform.tfvars` dosyasına yazarak Terraform'u uzaktan tetikleyecek. Böylece deploy işlemi tamamen web üzerinden yapılacak.
+- [ ] **Orphan Kaynak Temizliği** — Eski state yedeğindeki (`terraform.tfstate.backup`) kaynakların OCI konsolundan kontrol edilip free-tier aşımı yapmaması için temizlenmesi
 
 ### Kısa Vadeli
 - [ ] **Test Coverage** — Birim testleri ve entegrasyon testleri eklenmesi
@@ -243,8 +250,9 @@ Tüm yönetim işlemleri web paneli üzerinden yapılacak. Kullanıcı sadece te
 
 | Kural | Açıklama |
 |-------|----------|
-| **Hassas dosyalar gitignore'da** | `config.json`, `terraform.tfvars`, `*.pem`, `*.tfstate` asla commit edilmez |
-| **SSH key erişimi** | `key1.pem` dosyası salt okunabilir (`chmod 400`) olarak deploy edilir |
+| **Hassas dosyalar gitignore'da** | `config.json`, `terraform.tfvars`, `*.pem`, `/key1`, `/key1.pub`, `*.tfstate` asla commit edilmez |
+| **OCI API key** | `key1.pem` (ad kullanıcı seçer) salt okunabilir (`chmod 400`); sadece Terraform provider kullanır |
+| **SSH key** | `key1` (ad kullanıcı seçer) `chmod 600`; provisioner/panel/CLI kullanır, public yarısı VM'e gömülür |
 | **OCI credentials** | `terraform.tfvars` dosyasında tutulur, example dosyası sablon olarak paylaşılır |
 | **Panel erişimi** | Nginx sadece `127.0.0.1:80`'de dinler, dışarıya açık değildir |
 
@@ -275,7 +283,8 @@ Tüm yönetim işlemleri web paneli üzerinden yapılacak. Kullanıcı sadece te
 |-------|-------|-----------|
 | `config.json` | Kök dizin | Yüksek (çalışma zamanı) |
 | `terraform.tfvars` | Kök dizin | Yüksek (deploy zamanı) |
-| `key1.pem` | Kök dizin | Yüksek (SSH erişimi) |
+| `key1.pem` | Kök dizin | Yüksek (OCI API erişimi) |
+| `key1` / `key1.pub` | Kök dizin | Yüksek (SSH erişimi; adlar değişkenle seçilir) |
 | `mc_manager.py` | Kök dizin | Yüksek (CLI yönetimi) |
 | `web_panel/app/main.py` | Web panel | Yüksek (web arayüzü) |
 | `web_panel/app/ssh_client.py` | Web panel | Orta (yardımcı modül) |
@@ -324,7 +333,8 @@ flerovium, colorwheel, colorwheel_patcher, geckolib-fabric
 terraform init
 terraform plan
 terraform apply
-terraform output ssh_ip
+terraform output -raw ssh_ip   # yönetim/SSH IP'si
+terraform output -raw mc_ip    # oyuncu IP'si (NLB)
 ```
 
 ### CLI Komutları
@@ -347,10 +357,10 @@ docker compose up -d --build
 
 ### SSH Bağlantısı
 ```bash
-ssh ubuntu@<SERVER_IP>
+ssh -i <ssh-key> ubuntu@<SERVER_IP>
 sudo docker exec -it mc rcon-cli
 ```
 
 ---
 
-*Son Güncelleme: 2026-09-11*
+*Son Güncelleme: 2026-09-20*
