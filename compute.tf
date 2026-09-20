@@ -196,6 +196,7 @@ resource "null_resource" "setup_panel" {
 
   provisioner "remote-exec" {
     inline = [
+      "cloud-init status --wait",
       "sudo mkdir -p /opt/minecraft/panel/data",
       "sudo chown -R ubuntu:ubuntu /opt/minecraft/panel",
     ]
