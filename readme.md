@@ -133,9 +133,6 @@ OP management, Whitelist, Ban list.
 ### Settings
 Minecraft version, server type, RAM, players, MOTD, etc.
 
-### Oracle Cloud
-OCI credentials, Deploy/Destroy buttons, current infrastructure state.
-
 ---
 
 ## Supported Server Types
