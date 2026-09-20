@@ -36,11 +36,14 @@ chmod 600 key1
 
 ## Step 3: Configure Terraform
 
-1. Copy the example file and rename it:
+1. Copy the example files and rename them:
 
 ```bash
 cp terraform.tfvars.example terraform.tfvars
+cp config.example.json config.json
 ```
+
+> `config.json` is required — Terraform reads the server settings from it (`main.tf`).
 
 2. Open `terraform.tfvars` and fill in your values from Step 1:
 
@@ -61,8 +64,13 @@ region_key       = "il-jerusalem-1"
 4. Install Python dependencies (for `mc_manager.py` CLI):
 
 ```bash
+sudo apt install -y python3-venv  # Ubuntu/Debian'da venv desteği yoksa
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
+
+> On Ubuntu 23.04+ `pip install` without a venv is blocked (PEP 668). Either use the venv above or add `--break-system-packages`.
 
 ---
 
