@@ -5,6 +5,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./config.json:/app/config.json
+      - ./key1:/app/key1:ro
       - ./key1.pem:/app/key1.pem:ro
       - ..:/tf
     expose:

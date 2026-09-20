@@ -17,7 +17,7 @@ DEFAULT_CONFIG = {
     "server_name": "MC Server",
     "enable_rcon": True,
     "ssh_user": "ubuntu",
-    "ssh_key_path": "~/.ssh/id_rsa",
+    "ssh_key_path": "key1",
     "server_ip": "",
 }
 
@@ -53,9 +53,14 @@ def ssh_connect():
     if not ip:
         raise Exception("Sunucu IP'si ayarlanmamis. Ayarlardan config.json'i guncelleyin.")
 
-    key_path = Path("/app/key1.pem")
+    key_path = Path("/app/key1")
     if not key_path.exists():
-        key_path = Path(os.path.expanduser(config.get("ssh_key_path", "~/.ssh/id_rsa")))
+        key_path = Path(os.path.expanduser(config.get("ssh_key_path", "key1")))
+    if not key_path.exists():
+        key_path = Path("key1")
+    # Legacy fallback: older deployments used key1.pem as the SSH key
+    if not key_path.exists():
+        key_path = Path("/app/key1.pem")
     if not key_path.exists():
         key_path = Path("key1.pem")
     if not key_path.exists():

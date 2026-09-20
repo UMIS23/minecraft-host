@@ -9,6 +9,6 @@
   "server_name": "A Cool Server",
   "enable_rcon": true,
   "ssh_user": "ubuntu",
-  "ssh_key_path": "~/.ssh/id_rsa",
+  "ssh_key_path": "key1",
   "server_ip": ""
 }

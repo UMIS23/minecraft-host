@@ -16,8 +16,8 @@ from app.ssh_client import (
     is_configured, CONFIG_FILE,
 )
 
-TERRAFORM_DIR = Path("/tf/terraform")
-TERRAFORM_LOG = Path("/tf/terraform/terraform.log")
+TERRAFORM_DIR = Path("/tf")
+TERRAFORM_LOG = Path("/tf/terraform.log")
 TFVARS_FILE = TERRAFORM_DIR / "terraform.tfvars"
 
 MODRINTH_API = "https://api.modrinth.com/v2"

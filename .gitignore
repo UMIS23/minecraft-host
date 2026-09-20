@@ -1,6 +1,9 @@
 # Private Keys
 *.pem
 *.pem.pub
+# SSH key (separate from OCI API key)
+/key1
+/key1.pub
 
 
 # Sensitive Variables

@@ -124,7 +124,7 @@ resource "oci_core_instance" "mc_server" {
   }
 
   metadata = {
-    ssh_authorized_keys = file("key1.pem.pub")
+    ssh_authorized_keys = file("key1.pub")
     user_data = base64encode(<<-USERDATA
 #!/bin/bash
 exec > /var/log/user-data.log 2>&1
@@ -198,20 +198,20 @@ resource "null_resource" "setup_panel" {
       type        = "ssh"
       host        = oci_core_instance.mc_server.public_ip
       user        = "ubuntu"
-      private_key = file(var.private_key_path)
+      private_key = file(var.ssh_private_key_path)
       timeout     = "5m"
     }
   }
 
   provisioner "file" {
-    source      = var.private_key_path
-    destination = "/opt/minecraft/panel/key1.pem"
+    source      = var.ssh_private_key_path
+    destination = "/opt/minecraft/panel/key1"
 
     connection {
       type        = "ssh"
       host        = oci_core_instance.mc_server.public_ip
       user        = "ubuntu"
-      private_key = file(var.private_key_path)
+      private_key = file(var.ssh_private_key_path)
       timeout     = "5m"
     }
   }
@@ -220,9 +220,9 @@ resource "null_resource" "setup_panel" {
     inline = [
       "sudo mkdir -p /opt/minecraft/panel/data",
       "sudo chown -R ubuntu:ubuntu /opt/minecraft/panel",
-      "sudo chmod 600 /opt/minecraft/panel/key1.pem",
+      "sudo chmod 600 /opt/minecraft/panel/key1",
       "sudo chmod 600 /opt/minecraft/panel/app/ssh_client.py",
-      "cat > /tmp/config.json << 'JSONEOF'\n{\"minecraft_version\":\"${local.config.minecraft_version}\",\"server_type\":\"${local.config.server_type}\",\"ram_gb\":${local.config.ram_gb},\"server_port\":${local.config.server_port},\"max_players\":${local.config.max_players},\"online_mode\":${tostring(local.config.online_mode)},\"view_distance\":${local.config.view_distance},\"server_name\":\"${local.config.server_name}\",\"enable_rcon\":${tostring(local.config.enable_rcon)},\"ssh_user\":\"ubuntu\",\"ssh_key_path\":\"/app/key1.pem\",\"server_ip\":\"${oci_core_instance.mc_server.public_ip}\"}\nJSONEOF",
+      "cat > /tmp/config.json << 'JSONEOF'\n{\"minecraft_version\":\"${local.config.minecraft_version}\",\"server_type\":\"${local.config.server_type}\",\"ram_gb\":${local.config.ram_gb},\"server_port\":${local.config.server_port},\"max_players\":${local.config.max_players},\"online_mode\":${tostring(local.config.online_mode)},\"view_distance\":${local.config.view_distance},\"server_name\":\"${local.config.server_name}\",\"enable_rcon\":${tostring(local.config.enable_rcon)},\"ssh_user\":\"ubuntu\",\"ssh_key_path\":\"/app/key1\",\"server_ip\":\"${oci_core_instance.mc_server.public_ip}\"}\nJSONEOF",
       "sudo mv /tmp/config.json /opt/minecraft/panel/config.json",
       "cd /opt/minecraft/panel && sudo docker compose up -d --build",
     ]
@@ -231,7 +231,7 @@ resource "null_resource" "setup_panel" {
       type        = "ssh"
       host        = oci_core_instance.mc_server.public_ip
       user        = "ubuntu"
-      private_key = file(var.private_key_path)
+      private_key = file(var.ssh_private_key_path)
       timeout     = "10m"
     }
   }

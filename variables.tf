@@ -20,7 +20,13 @@ variable "fingerprint" {
 
 variable "private_key_path" {
   type        = string
-  description = "OCI Private Key Path"
+  description = "OCI API Private Key Path"
+}
+
+variable "ssh_private_key_path" {
+  type        = string
+  description = "SSH Private Key Path for VM access (separate from OCI API key)"
+  default     = "key1"
 }
 
 variable "region_key" {
