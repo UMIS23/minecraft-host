@@ -324,6 +324,14 @@ player-animation-lib, better-third-person, leawind_third_person,
 flerovium, colorwheel, colorwheel_patcher, geckolib-fabric
 ```
 
+### 7.8. Git Çalışma Düzeni
+
+- Remote: `https://github.com/UMIS23/minecraft-host.git`
+- Aktif dal: `fix/fresh-clone-fixes` (→ `origin/fix/fresh-clone-fixes`)
+- Kural: `main`'de iş yapılmaz, feature dalında çalışılır, biten iş commit + push ile kapatılır
+- Secret'lar commitlenmez (bkz. 7.1); `git ls-files | grep -E "pem$|tfvars$|config.json|tfstate"` boş dönmelidir
+- Untracked local dosyalar normaldir: `opencode.json`, `*.bak`
+
 ---
 
 ## 8. Hızlı Referans
