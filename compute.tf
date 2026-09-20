@@ -190,6 +190,10 @@ resource "null_resource" "setup_panel" {
     instance_id = oci_core_instance.mc_server.id
   }
 
+  provisioner "local-exec" {
+    command = "tar -czf /tmp/web_panel.tgz --exclude=.venv --exclude=__pycache__ --exclude=*.pyc --exclude=*.bak -C web_panel ."
+  }
+
   provisioner "remote-exec" {
     inline = [
       "sudo mkdir -p /opt/minecraft/panel/data",
@@ -206,8 +210,8 @@ resource "null_resource" "setup_panel" {
   }
 
   provisioner "file" {
-    source      = "web_panel/"
-    destination = "/opt/minecraft/panel"
+    source      = "/tmp/web_panel.tgz"
+    destination = "/tmp/web_panel.tgz"
 
     connection {
       type        = "ssh"
@@ -233,6 +237,7 @@ resource "null_resource" "setup_panel" {
 
   provisioner "remote-exec" {
     inline = [
+      "tar -xzf /tmp/web_panel.tgz -C /opt/minecraft/panel && rm -f /tmp/web_panel.tgz",
       "sudo mkdir -p /opt/minecraft/panel/data",
       "sudo chown -R ubuntu:ubuntu /opt/minecraft/panel",
       "sudo chmod 600 /opt/minecraft/panel/key1",
