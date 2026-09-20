@@ -16,21 +16,23 @@ Deploy a Minecraft server on Oracle Cloud Free Tier and manage it through a web 
 2. Click your **profile icon** (top right) → **Tokens and Keys**
 3. Left menu → **API Keys** → **Add API Key**
 4. Select **Generate API Key Pair**
-5. Download the **Private Key** (`.pem` file) → save it to this project folder under any name you like (e.g. `your-oci-key.pem`)
+5. Download the **Private Key** (`.pem` file) → the console doesn't ask for a name, so rename it yourself into this project folder (e.g. `mv ~/Downloads/*.pem ./my-oci-key.pem`)
 6. Click **Add** → copy the **Tenancy OCID**, **User OCID**, **Fingerprint**, and **Region** shown on screen.
 7. For **Compartment OCID**: click the navigation menu (top left) → **Identity & Security** → **Compartments** → select your compartment → **Copy OCID**.
-8. Set key permissions: `chmod 400 your-oci-key.pem` (use your own file name)
+8. Set key permissions: `chmod 400 my-oci-key.pem` (use your own file name)
 
 ---
 
 ## Step 2: Create SSH Key
 
-Below, `your-key-name` is a placeholder — replace it with any name you choose. It must be **different** from the OCI API key above:
+Pick any name for your SSH key (e.g. `my-ssh-key`). It must be **different** from the OCI API key above:
 
 ```bash
-ssh-keygen -t ed25519 -f your-key-name -N ""
-chmod 600 your-key-name
+ssh-keygen -t ed25519 -f my-ssh-key -N ""
+chmod 600 my-ssh-key
 ```
+
+> The name after `-f` becomes both files' name: `my-ssh-key` (private) + `my-ssh-key.pub` (public, created automatically). This is where you name your key.
 
 > Terraform automatically adds this key to your VM during deployment.
 
@@ -38,12 +40,12 @@ chmod 600 your-key-name
 
 | Key | File(s) | Setting |
 |---|---|---|
-| OCI API private key | `terraform.tfvars` | `private_key_path = "your-oci-key.pem"` |
-| SSH private key | `terraform.tfvars` | `ssh_private_key_path = "your-key-name"` |
-| SSH public key | `terraform.tfvars` | `ssh_public_key_path = "your-key-name.pub"` |
-| SSH private key | `config.json` | `"ssh_key_path": "your-key-name"` |
+| OCI API private key | `terraform.tfvars` | `private_key_path = "my-oci-key.pem"` |
+| SSH private key | `terraform.tfvars` | `ssh_private_key_path = "my-ssh-key"` |
+| SSH public key | `terraform.tfvars` | `ssh_public_key_path = "my-ssh-key.pub"` |
+| SSH private key | `config.json` | `"ssh_key_path": "my-ssh-key"` |
 
-> Running the panel locally with `docker compose` and custom key names? Export `SSH_KEY_FILE=your-key-name` and/or `OCI_KEY_FILE=your-oci-key.pem` first (defaults: `key1` / `key1.pem`).
+> Running the panel locally with `docker compose` and custom key names? Export `SSH_KEY_FILE=my-ssh-key` and/or `OCI_KEY_FILE=my-oci-key.pem` first (defaults: `key1` / `key1.pem`).
 
 ---
 
@@ -65,9 +67,9 @@ tenancy_ocid     = "ocid1.tenancy.oc1..aaaa..."
 user_ocid        = "ocid1.user.oc1..aaaa..."
 compartment_ocid = "ocid1.tenancy.oc1..aaaa..."
 fingerprint      = "xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx"
-private_key_path = "your-oci-key.pem"
-ssh_private_key_path = "your-key-name"
-ssh_public_key_path  = "your-key-name.pub"
+private_key_path = "my-oci-key.pem"
+ssh_private_key_path = "my-ssh-key"
+ssh_public_key_path  = "my-ssh-key.pub"
 region_key       = "il-jerusalem-1"
 ```
 
@@ -109,7 +111,7 @@ terraform output -raw mc_ip    # player address (give this to players)
 1. Start an SSH tunnel:
 
 ```bash
-ssh -i your-key-name -L 8080:127.0.0.1:80 ubuntu@<SERVER_IP>
+ssh -i my-ssh-key -L 8080:127.0.0.1:80 ubuntu@<SERVER_IP>
 ```
 
 > Use your own SSH key name from Step 2.
