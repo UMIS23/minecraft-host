@@ -34,8 +34,6 @@ chmod 600 my-ssh-key
 
 > The name after `-f` becomes both files' name: `my-ssh-key` (private) + `my-ssh-key.pub` (public, created automatically). This is where you name your key.
 
-> Terraform automatically adds this key to your VM during deployment.
-
 ### Where key names go
 
 | Key | File(s) | Setting |
@@ -44,8 +42,6 @@ chmod 600 my-ssh-key
 | SSH private key | `terraform.tfvars` | `ssh_private_key_path = "my-ssh-key"` |
 | SSH public key | `terraform.tfvars` | `ssh_public_key_path = "my-ssh-key.pub"` |
 | SSH private key | `config.json` | `"ssh_key_path": "my-ssh-key"` |
-
-> Running the panel locally with `docker compose` and custom key names? Export `SSH_KEY_FILE=my-ssh-key` and/or `OCI_KEY_FILE=my-oci-key.pem` first (defaults: `key1` / `key1.pem`).
 
 ---
 
@@ -57,8 +53,6 @@ chmod 600 my-ssh-key
 cp terraform.tfvars.example terraform.tfvars
 cp config.example.json config.json
 ```
-
-> `config.json` is required — Terraform reads the server settings from it (`main.tf`).
 
 2. Open `terraform.tfvars` and fill in your values from Step 1:
 
@@ -86,8 +80,6 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-> On Ubuntu 23.04+ `pip install` without a venv is blocked (PEP 668). Either use the venv above or add `--break-system-packages`.
-
 ---
 
 ## Step 4: Deploy
@@ -113,8 +105,6 @@ terraform output -raw mc_ip    # player address (give this to players)
 ```bash
 ssh -i my-ssh-key -L 8080:127.0.0.1:80 ubuntu@<SERVER_IP>
 ```
-
-> Use your own SSH key name from Step 2.
 
 2. Open in browser: `http://localhost:8080`
 
