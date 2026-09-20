@@ -190,6 +190,21 @@ resource "null_resource" "setup_panel" {
     instance_id = oci_core_instance.mc_server.id
   }
 
+  provisioner "remote-exec" {
+    inline = [
+      "sudo mkdir -p /opt/minecraft/panel/data",
+      "sudo chown -R ubuntu:ubuntu /opt/minecraft/panel",
+    ]
+
+    connection {
+      type        = "ssh"
+      host        = oci_core_instance.mc_server.public_ip
+      user        = "ubuntu"
+      private_key = file(var.ssh_private_key_path)
+      timeout     = "5m"
+    }
+  }
+
   provisioner "file" {
     source      = "web_panel/"
     destination = "/opt/minecraft/panel"
