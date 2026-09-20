@@ -29,6 +29,12 @@ variable "ssh_private_key_path" {
   default     = "key1"
 }
 
+variable "ssh_public_key_path" {
+  type        = string
+  description = "SSH Public Key Path installed on the VM (separate from OCI API key)"
+  default     = "key1.pub"
+}
+
 variable "region_key" {
   type        = string
   description = "OCI Region"

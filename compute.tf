@@ -124,7 +124,7 @@ resource "oci_core_instance" "mc_server" {
   }
 
   metadata = {
-    ssh_authorized_keys = file("key1.pub")
+    ssh_authorized_keys = file(var.ssh_public_key_path)
     user_data = base64encode(<<-USERDATA
 #!/bin/bash
 exec > /var/log/user-data.log 2>&1

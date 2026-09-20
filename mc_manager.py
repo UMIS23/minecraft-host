@@ -120,7 +120,7 @@ def ssh_connect():
         print("[ERROR] Server IP not found. Run 'terraform apply' first.")
         sys.exit(1)
 
-    key_path = Path(os.path.expanduser(config.get("ssh_key_path", "~/.ssh/id_rsa")))
+    key_path = Path(os.path.expanduser(config.get("ssh_key_path", "key1")))
     if not key_path.exists():
         print(f"[ERROR] SSH key not found: {key_path}")
         sys.exit(1)

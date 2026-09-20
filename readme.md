@@ -16,21 +16,34 @@ Deploy a Minecraft server on Oracle Cloud Free Tier and manage it through a web 
 2. Click your **profile icon** (top right) → **Tokens and Keys**
 3. Left menu → **API Keys** → **Add API Key**
 4. Select **Generate API Key Pair**
-5. Download the **Private Key** (`.pem` file) → save it to this project folder
+5. Download the **Private Key** (`.pem` file) → save it to this project folder under any name you like (e.g. `my-oci-key.pem`)
 6. Click **Add** → copy the **Tenancy OCID**, **User OCID**, **Fingerprint**, and **Region** shown on screen.
 7. For **Compartment OCID**: click the navigation menu (top left) → **Identity & Security** → **Compartments** → select your compartment → **Copy OCID**.
-8. Set key permissions: `chmod 400 key1.pem`
+8. Set key permissions: `chmod 400 my-oci-key.pem` (use your own file name)
 
 ---
 
 ## Step 2: Create SSH Key
 
+Pick any name for your SSH key (e.g. `my-ssh-key`). It must be **different** from the OCI API key above:
+
 ```bash
-ssh-keygen -t ed25519 -f key1 -N ""
-chmod 600 key1
+ssh-keygen -t ed25519 -f my-ssh-key -N ""
+chmod 600 my-ssh-key
 ```
 
 > Terraform automatically adds this key to your VM during deployment.
+
+### Where key names go
+
+| Key | File(s) | Setting |
+|---|---|---|
+| OCI API private key | `terraform.tfvars` | `private_key_path = "my-oci-key.pem"` |
+| SSH private key | `terraform.tfvars` | `ssh_private_key_path = "my-ssh-key"` |
+| SSH public key | `terraform.tfvars` | `ssh_public_key_path = "my-ssh-key.pub"` |
+| SSH private key | `config.json` | `"ssh_key_path": "my-ssh-key"` |
+
+> Running the panel locally with `docker compose` and custom key names? Export `SSH_KEY_FILE=my-ssh-key` and/or `OCI_KEY_FILE=my-oci-key.pem` first (defaults: `key1` / `key1.pem`).
 
 ---
 
@@ -52,8 +65,9 @@ tenancy_ocid     = "ocid1.tenancy.oc1..aaaa..."
 user_ocid        = "ocid1.user.oc1..aaaa..."
 compartment_ocid = "ocid1.tenancy.oc1..aaaa..."
 fingerprint      = "xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx"
-private_key_path = "key1.pem"
-ssh_private_key_path = "key1"
+private_key_path = "my-oci-key.pem"
+ssh_private_key_path = "my-ssh-key"
+ssh_public_key_path  = "my-ssh-key.pub"
 region_key       = "il-jerusalem-1"
 ```
 
@@ -90,8 +104,10 @@ Wait 5-8 minutes for deployment to complete. The output will show your server's 
 1. Start an SSH tunnel:
 
 ```bash
-ssh -i key1 -L 8080:127.0.0.1:80 ubuntu@<SERVER_IP>
+ssh -i my-ssh-key -L 8080:127.0.0.1:80 ubuntu@<SERVER_IP>
 ```
+
+> Use your own SSH key name from Step 2.
 
 2. Open in browser: `http://localhost:8080`
 
