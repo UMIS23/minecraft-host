@@ -6,7 +6,7 @@
 <div class="status-grid">
     <div class="card">
         <h3>Server Status</h3>
-        <span class="status-badge {% if status.container_status == 'running' %}online{% else %}offline{% endif %}">
+        <span id="server-status-badge" class="status-badge {% if status.container_status == 'running' %}online{% elif status.container_status == 'starting' %}starting{% else %}offline{% endif %}">
             {{ status.container_status }}
         </span>
     </div>
@@ -39,7 +39,7 @@
 {% if status.resources %}
 <div class="card full-width">
     <h3>Resource Usage</h3>
-    <p class="mono">{{ status.resources }}</p>
+    <p class="mono" id="server-resources">{{ status.resources }}</p>
 </div>
 {% endif %}
 
@@ -61,4 +61,39 @@
         <button type="submit" class="btn btn-yellow">Restart</button>
     </form>
 </div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    var badge = document.getElementById("server-status-badge");
+    var resources = document.getElementById("server-resources");
+
+    function badgeClass(s) {
+        if (s === "running") return "status-badge online";
+        if (s === "starting") return "status-badge starting";
+        return "status-badge offline";
+    }
+
+    async function refreshStatus() {
+        try {
+            var res = await fetch("/api/status", {cache: "no-store"});
+            if (!res.ok) return;
+            var st = await res.json();
+            if (badge && st.container_status) {
+                badge.className = badgeClass(st.container_status);
+                badge.textContent = st.container_status;
+            }
+            if (resources) {
+                resources.textContent = st.resources || "-";
+            }
+        } catch (e) {
+            /* sessizce bir sonraki turu bekle */
+        }
+    }
+
+    setInterval(refreshStatus, 5000);
+})();
+</script>
 {% endblock %}

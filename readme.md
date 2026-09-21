@@ -100,15 +100,14 @@ terraform output -raw mc_ip    # player address (give this to players)
 
 ## Step 5: Access Web Panel
 
-1. Start an SSH tunnel:
+Persistent tunnel (auto-reconnect, survives terminal close):
 
 ```bash
-ssh -i my-ssh-key -L 8080:127.0.0.1:80 ubuntu@<SERVER_IP>
+sudo apt install -y autossh   # once
+autossh -M 0 -f -N -i my-ssh-key -L 8080:127.0.0.1:80 ubuntu@<SERVER_IP>
 ```
 
-2. Open in browser: `http://localhost:8080`
-
-3. Go to **Settings** → paste your server's public IP into **Server IP** field → Save.
+Open `http://localhost:8080` → **Settings** → paste server IP → Save.
 
 ---
 

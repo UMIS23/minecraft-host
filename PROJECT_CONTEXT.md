@@ -214,6 +214,9 @@ Terraform (.tf dosyaları)
 | Key Ayrımı (API vs SSH) | ✅ Tamamlandı | `key1.pem` (OCI API) + `key1`/`key1.pub` (SSH); adlar değişkenle seçiliyor |
 | Oyuncu IP'si (`mc_ip`) | ✅ Tamamlandı | NLB public IP output + dashboard/CLI'de ayrı gösterim |
 | Panel Deploy Fix | ✅ Tamamlandı | Tarball upload + mkdir sıralaması (scp race çözüldü) |
+| Gerçek Hazır Olma Kontrolü | ✅ Tamamlandı | `running` artık bağlanılabilir demek: container `running` + MC handshake (`mc-monitor status`) OK → running, yoksa `starting`. Host port kontrolü YANILTICI (docker-proxy portu container başlar başlamaz tutar) — kullanılmıyor |
+| Canlı Dashboard | ✅ Tamamlandı | `GET /api/status` endpoint + 5 sn polling; rozet F5'siz güncellenir (running yeşil / starting sarı / diğer kırmızı) |
+| Kalıcı SSH Tüneli | ✅ Tamamlandı | Panel localhost-only olduğu için erişim tünelle: `autossh -M 0 -f -N -L 8080:127.0.0.1:80` (kopunca otomatik bağlanır, bkz. readme Step 5) |
 
 ### 🔧 Mevcut Durum
 
@@ -227,6 +230,8 @@ Terraform (.tf dosyaları)
 ---
 
 ## 6. Gelecek Adımlar ve Yol Haritası
+
+> Durum (2026-09-21): Şu an planlı yeni geliştirme yok — yol haritası beklemede, proje bakım modunda.
 
 ### Genel Vizyon
 Tüm yönetim işlemleri web paneli ve CLI üzerinden yapılacak. Deploy Terraform CLI ile yapılıyor (web paneldeki Oracle Cloud bölümü güvenlik/sadelik için kaldırıldı). Oyuncu trafiği NLB üzerinden, yönetim (SSH/panel/CLI) doğrudan VM IP'si üzerinden yürüyor.
@@ -295,6 +300,7 @@ Tüm yönetim işlemleri web paneli ve CLI üzerinden yapılacak. Deploy Terrafo
 - `load_config()` / `save_config()` — Config yönetimi
 - `ssh_connect()` / `ssh_exec()` — SSH bağlantısı
 - `docker_cmd()` — Docker komut sarmalayıcı
+- `resolve_server_status()` / `is_minecraft_ready()` — Gerçek MC hazır olma kontrolü (container + mc-monitor ping + Done-log fallback)
 - `get_java_tag()` — MC sürümü → Java tag eşleştirmesi
 - `build_docker_run()` — Docker run komutu oluşturma
 
@@ -327,8 +333,10 @@ flerovium, colorwheel, colorwheel_patcher, geckolib-fabric
 ### 7.8. Git Çalışma Düzeni
 
 - Remote: `https://github.com/UMIS23/minecraft-host.git`
-- Aktif dal: `fix/fresh-clone-fixes` (→ `origin/fix/fresh-clone-fixes`)
+- Aktif dal: `main` (önceki `fix/fresh-clone-fixes` ve `dev` çalışması merge edildi)
 - Kural: `main`'de iş yapılmaz, feature dalında çalışılır, biten iş commit + push ile kapatılır
+- Durum rozeti: `running` (yeşil) = bağlanılabilir, `starting` (sarı) = boot sürüyor, diğer (kırmızı)
+- Panel deploy: `terraform apply -replace="null_resource.setup_panel"` (düz apply paneli yenilemez; trigger sadece instance_id)
 - Secret'lar commitlenmez (bkz. 7.1); `git ls-files | grep -E "pem$|tfvars$|config.json|tfstate"` boş dönmelidir
 - Untracked local dosyalar normaldir: `opencode.json`, `*.bak`
 
@@ -363,6 +371,12 @@ cd web_panel
 docker compose up -d --build
 ```
 
+### Panele Erişim (SSH Tüneli)
+```bash
+autossh -M 0 -f -N -i <ssh-key> -L 8080:127.0.0.1:80 ubuntu@$(terraform output -raw ssh_ip)
+# tarayıcı: http://localhost:8080
+```
+
 ### SSH Bağlantısı
 ```bash
 ssh -i <ssh-key> ubuntu@<SERVER_IP>
@@ -371,4 +385,4 @@ sudo docker exec -it mc rcon-cli
 
 ---
 
-*Son Güncelleme: 2026-09-20*
+*Son Güncelleme: 2026-09-21*

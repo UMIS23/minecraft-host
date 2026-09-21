@@ -6,7 +6,7 @@ from pathlib import Path
 import requests
 
 from fastapi import FastAPI, Request, Form
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from app.ssh_client import (
@@ -62,6 +62,17 @@ async def dashboard(request: Request):
         return RedirectResponse("/settings", status_code=303)
     status = get_server_status()
     return templates.TemplateResponse("dashboard.html", {"request": request, "status": status})
+
+
+@app.get("/api/status")
+async def api_status():
+    """Live server status as JSON (dashboard auto-refresh polls this)."""
+    if not is_configured():
+        return JSONResponse({"error": "not configured"}, status_code=400)
+    try:
+        return JSONResponse(get_server_status())
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 @app.post("/server/start")

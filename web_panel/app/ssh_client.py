@@ -89,6 +89,40 @@ def docker_cmd(cmd):
     return f"docker exec mc {cmd}"
 
 
+def resolve_server_status(container_status, mc_ready):
+    """Map Docker container state + MC readiness to user-facing status.
+
+    Docker reports 'running' as soon as the container process starts, but
+    the Minecraft server inside needs ~1 minute (JVM + world load) before
+    it accepts connections. Report 'starting' for that window so 'running'
+    means 'you can actually connect'.
+    """
+    if container_status != "running":
+        return container_status or "not found"
+    return "running" if mc_ready else "starting"
+
+
+def is_minecraft_ready(ssh, port, server_type="vanilla"):
+    """True if the Minecraft server itself answers (not just docker-proxy).
+
+    A host-level port check is useless here: Docker's docker-proxy holds the
+    published host port from container start, long before the MC server
+    inside boots. So we ping the real MC status protocol from inside the
+    container, with the boot-done log line of the current boot as fallback.
+    """
+    if server_type == "bedrock":
+        cmd = f"docker exec mc mc-monitor status-bedrock --host localhost --port {port} --timeout 5s >/dev/null 2>&1"
+    else:
+        cmd = f"docker exec mc mc-monitor status --host localhost --port {port} --timeout 5s >/dev/null 2>&1"
+    exit_code, _, _ = ssh_exec(ssh, cmd, timeout=20)
+    if exit_code == 0:
+        return True
+    _, started, _ = ssh_exec(ssh, "docker inspect mc --format '{{.State.StartedAt}}' 2>/dev/null", timeout=10)
+    since = started.strip() or "1 hour ago"
+    _, logs, _ = ssh_exec(ssh, f"docker logs mc --since '{since}' 2>&1 | grep -iE 'for help, type|server started'", timeout=15)
+    return bool(logs)
+
+
 def get_java_tag(mc_version):
     try:
         parts = mc_version.split(".")
@@ -156,7 +190,10 @@ def get_server_status():
     try:
         ssh = ssh_connect()
         _, status, _ = ssh_exec(ssh, "docker inspect mc --format '{{.State.Status}}' 2>/dev/null")
-        result["container_status"] = status or "not found"
+        port = config.get("server_port", 25565)
+        mc_ready = is_minecraft_ready(ssh, port, config.get("server_type", "vanilla")) if status == "running" else False
+        result["container_status"] = resolve_server_status(status, mc_ready)
+        result["mc_ready"] = result["container_status"] == "running"
 
         if status == "running":
             _, resources, _ = ssh_exec(ssh, "docker stats mc --no-stream --format 'CPU: {{.CPUPerc}} | MEM: {{.MemUsage}}' 2>/dev/null")

@@ -173,6 +173,40 @@ def docker_cmd(cmd):
     return f"docker exec mc {cmd}"
 
 
+def resolve_server_status(container_status, mc_ready):
+    """Map Docker container state + MC readiness to user-facing status.
+
+    Docker reports 'running' as soon as the container process starts, but
+    the Minecraft server inside needs ~1 minute (JVM + world load) before
+    it accepts connections. Report 'starting' for that window so 'running'
+    means 'you can actually connect'.
+    """
+    if container_status != "running":
+        return container_status or "not found"
+    return "running" if mc_ready else "starting"
+
+
+def is_minecraft_ready(ssh, port, server_type="vanilla"):
+    """True if the Minecraft server itself answers (not just docker-proxy).
+
+    A host-level port check is useless here: Docker's docker-proxy holds the
+    published host port from container start, long before the MC server
+    inside boots. So we ping the real MC status protocol from inside the
+    container, with the boot-done log line of the current boot as fallback.
+    """
+    if server_type == "bedrock":
+        cmd = f"docker exec mc mc-monitor status-bedrock --host localhost --port {port} --timeout 5s >/dev/null 2>&1"
+    else:
+        cmd = f"docker exec mc mc-monitor status --host localhost --port {port} --timeout 5s >/dev/null 2>&1"
+    exit_code, _, _ = ssh_exec(ssh, cmd, timeout=20)
+    if exit_code == 0:
+        return True
+    _, started, _ = ssh_exec(ssh, "docker inspect mc --format '{{.State.StartedAt}}' 2>/dev/null", timeout=10)
+    since = started.strip() or "1 hour ago"
+    _, logs, _ = ssh_exec(ssh, f"docker logs mc --since '{since}' 2>&1 | grep -iE 'for help, type|server started'", timeout=15)
+    return bool(logs)
+
+
 def docker_compose_cmd(cmd):
     """Wrap a command with docker compose in /opt/minecraft."""
     return f"cd /opt/minecraft && docker compose {cmd}"
@@ -229,12 +263,23 @@ def cmd_status():
         return
 
     try:
-        # Docker container status
+        # Docker container status + real MC readiness (MC protocol ping).
+        # NOTE: container 'running' alone is NOT enough — the MC server
+        # inside needs ~1 min before it accepts connections. A host-level
+        # port check is also NOT enough: docker-proxy holds the host port
+        # from container start, so we ping the real MC server instead.
         _, stdout, _ = ssh_exec(ssh, "docker inspect mc --format '{{.State.Status}}' 2>/dev/null")
+        container_state = stdout or "NOT FOUND"
+        mc_ready = is_minecraft_ready(ssh, config['server_port'], config.get('server_type', 'vanilla')) if stdout == "running" else False
+        server_state = resolve_server_status(stdout, mc_ready)
         if stdout:
             print(f"\n  Container Status: {stdout}")
         else:
             print(f"\n  Container Status: NOT FOUND")
+        if server_state == "starting":
+            print(f"  Server Status:    STARTING (container up, MC still booting ~1 min)")
+        else:
+            print(f"  Server Status:    {server_state.upper()}")
 
         # Container uptime
         _, stdout, _ = ssh_exec(ssh, "docker inspect mc --format '{{.State.StartedAt}}' 2>/dev/null")
@@ -246,12 +291,13 @@ def cmd_status():
         if stdout:
             print(f"  Resources:       {stdout}")
 
-        # Port check
-        _, stdout, _ = ssh_exec(ssh, f"ss -tlnp | grep {config['server_port']}")
-        if stdout:
-            print(f"  Port {config['server_port']}:    LISTENING ✓")
+        # MC port check (real server answer, not docker-proxy listener)
+        if mc_ready:
+            print(f"  Port {config['server_port']}:    OPEN ✓ (accepting connections)")
+        elif stdout == "running":
+            print(f"  Port {config['server_port']}:    NOT OPEN YET (server booting...)")
         else:
-            print(f"  Port {config['server_port']}:    NOT LISTENING ✗")
+            print(f"  Port {config['server_port']}:    CLOSED (container not running)")
 
         # Java version in container
         _, stdout, _ = ssh_exec(ssh, docker_cmd("java -version 2>&1 | head -1"), timeout=10)
