@@ -5,6 +5,7 @@
 /key1
 /key1.pub
 
+PROJECT_CONTEXT.md
 
 # Sensitive Variables
 terraform.tfvars
